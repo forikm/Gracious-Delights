@@ -8,8 +8,8 @@ Admin: **https://gracious-delights-chi.vercel.app/#admin/products**.
 - Vercel workspace: `fita4`; separate project: `gracious-delights`. Fetch-it Admin was not changed.
 - Neon project: `Gracious Delights` (`little-sea-19309805`), production branch, database `neondb`. Initial schema applied. At the owner's request, the six prototype products, prices, stock quantities, recipes, and 13 ingredients were restored on October 13, 2026. Opening batches already deduct their ingredients. Review these example values before accepting real orders.
 - Production environment has `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, and `APP_ORIGIN`. Credentials are not stored in this repository.
-- Source deployed from commit `553dab226810b38e1fa6a912f065d5a442e8d1ba` using a source archive. Deployment: `4w3oPDwfts3ys2SvTFWvSFTy3sNz`.
-- **GitHub automatic deployment is not connected.** The signed-in Vercel account's GitHub integration could not access `forikm/Gracious-Delights`. Future code changes need another source deployment, or connection of this repository under this project's Git settings. Redeploying an existing deployment reuses its source; it does not fetch new GitHub commits.
+- Current application source deployed from commit `1b3ced4` through the official Vercel CLI. Deployment: `EZcJPtkHkPGzHjDqaJ1pbrsqvn5N`. Initial deployment used a source archive.
+- **GitHub automatic deployment is not connected.** The signed-in Vercel account's GitHub integration could not access `forikm/Gracious-Delights`. This local folder is now linked specifically to `fita4/gracious-delights`. Future code changes need another source deployment through the CLI, or connection of this repository under this project's Git settings. Verify the target before deploying. Redeploying an existing deployment reuses its source; it does not fetch new GitHub commits.
 - Complete kitchen setup and the phone-to-admin order checks below before accepting real orders.
 
 This repository builds without attaching a cloud account. Follow these steps when ready to publish.
