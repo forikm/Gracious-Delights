@@ -1,0 +1,8 @@
+.env*
+!.env.example
+previews/
+reviewer_work/
+*.docx
+*.zip
+.test-data/
+tests/
