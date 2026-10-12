@@ -8,4 +8,14 @@ Vercel/Neon preparation checked locally on October 12, 2026.
 - Browser: customer checkout returned an order reference; admin required sign-in and displayed the same database order.
 - Domain tests: rounding, ingredients, recipes, price changes, hidden products, quantities and order transitions.
 
-The API tests use a real SQL engine locally, not a live Neon connection. The local engine queues connections; locking across production PostgreSQL connections still needs the deployment smoke test in DEPLOYMENT.md. Cloud configuration, live migration and public deployment were not performed for this repository-only handoff.
+The API tests use a real SQL engine locally. The local engine queues connections; locking across production PostgreSQL connections still needs the full deployment smoke test in DEPLOYMENT.md.
+
+## Live deployment checks — October 13, 2026
+
+- Vercel production deployment `4w3oPDwfts3ys2SvTFWvSFTy3sNz` reached Ready and serves https://gracious-delights-chi.vercel.app/.
+- Applied the initial schema to the authorized empty Neon database; verified all four tables exist.
+- Public API returned HTTP 200, `admin: false`, an empty catalog and no orders, with `Cache-Control: no-store`.
+- Signed-out admin mutation returned 403; incorrect login returned 401; a cross-origin mutation returned 403.
+- PWA manifest and service worker returned HTTP 200 with appropriate content types.
+- Browser displayed the storefront and protected admin sign-in form.
+- No sample products or orders were inserted. Successful owner sign-in and a complete real-product order/production flow still require the owner's kitchen setup and checks in DEPLOYMENT.md.

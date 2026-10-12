@@ -1,5 +1,17 @@
 # Connect your Neon and Vercel accounts
 
+## Current production deployment
+
+Published October 13, 2026: **https://gracious-delights-chi.vercel.app/**.
+Admin: **https://gracious-delights-chi.vercel.app/#admin/products**.
+
+- Vercel workspace: `fita4`; separate project: `gracious-delights`. Fetch-it Admin was not changed.
+- Neon project: `Gracious Delights` (`little-sea-19309805`), production branch, database `neondb`. Initial schema applied; catalog starts empty.
+- Production environment has `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, and `APP_ORIGIN`. Credentials are not stored in this repository.
+- Source deployed from commit `553dab226810b38e1fa6a912f065d5a442e8d1ba` using a source archive. Deployment: `4w3oPDwfts3ys2SvTFWvSFTy3sNz`.
+- **GitHub automatic deployment is not connected.** The signed-in Vercel account's GitHub integration could not access `forikm/Gracious-Delights`. Future code changes need another source deployment, or connection of this repository under this project's Git settings. Redeploying an existing deployment reuses its source; it does not fetch new GitHub commits.
+- Complete kitchen setup and the phone-to-admin order checks below before accepting real orders.
+
 This repository builds without attaching a cloud account. Follow these steps when ready to publish.
 
 ## 1. Prepare Neon
