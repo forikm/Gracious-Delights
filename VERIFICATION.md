@@ -19,3 +19,10 @@ The API tests use a real SQL engine locally. The local engine queues connections
 - PWA manifest and service worker returned HTTP 200 with appropriate content types.
 - Browser displayed the storefront and protected admin sign-in form. The owner successfully signed in with their chosen password; the live Products workspace showed "Connected to kitchen".
 - No sample products or orders were inserted. A complete real-product order/production flow still requires the owner's kitchen setup and checks in DEPLOYMENT.md.
+
+## Catalog restoration and mobile installation — October 13, 2026
+
+- Owner explicitly requested restoration of the prototype prices, quantities, and recipes. An atomic update applied only while products, ingredients, and orders were empty; existing nonempty shop data could not be overwritten.
+- Live API confirmed six products with stock 8, 3, 2, 12, 5, and 0, and continued hiding ingredient inventory from signed-out customers.
+- Added a prominent install panel and removed narrow-screen hiding of the install control. Tested panel visibility and manual-install instructions in a 320-pixel browser viewport. Actual Android Chrome native install-dialog availability is controlled by Chrome and still needs confirmation on the owner's phone.
+- Re-ran all 32 tests successfully and built the frontend. Local preview was used only for installation UI checks; its database was not configured.

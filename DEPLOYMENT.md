@@ -6,7 +6,7 @@ Published October 13, 2026: **https://gracious-delights-chi.vercel.app/**.
 Admin: **https://gracious-delights-chi.vercel.app/#admin/products**.
 
 - Vercel workspace: `fita4`; separate project: `gracious-delights`. Fetch-it Admin was not changed.
-- Neon project: `Gracious Delights` (`little-sea-19309805`), production branch, database `neondb`. Initial schema applied; catalog starts empty.
+- Neon project: `Gracious Delights` (`little-sea-19309805`), production branch, database `neondb`. Initial schema applied. At the owner's request, the six prototype products, prices, stock quantities, recipes, and 13 ingredients were restored on October 13, 2026. Opening batches already deduct their ingredients. Review these example values before accepting real orders.
 - Production environment has `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, and `APP_ORIGIN`. Credentials are not stored in this repository.
 - Source deployed from commit `553dab226810b38e1fa6a912f065d5a442e8d1ba` using a source archive. Deployment: `4w3oPDwfts3ys2SvTFWvSFTy3sNz`.
 - **GitHub automatic deployment is not connected.** The signed-in Vercel account's GitHub integration could not access `forikm/Gracious-Delights`. Future code changes need another source deployment, or connection of this repository under this project's Git settings. Redeploying an existing deployment reuses its source; it does not fetch new GitHub commits.
@@ -70,6 +70,8 @@ Locally use `APP_ORIGIN=http://localhost:4173`. For Vercel previews, omit `APP_O
 Local tests do not replace this final check against the actual Neon branch and Vercel deployment.
 
 ## Operations
+
+On Android Chrome, the website offers a visible **Get the app** panel, including narrow phones. If Chrome supplies its install event, the button opens the native prompt. Otherwise it shows instructions for Chrome's menu → **Install app**, **Install and create shortcut**, or **Add to Home screen**. Chrome controls prompt availability; the website cannot force an automatic browser dialog. The install panel is hidden when the app is already open in standalone mode. On iPhone, use Safari → Share → **Add to Home Screen**.
 
 The inbox refreshes while open; background SMS/email notifications are not included. Review pending orders and cancel abandoned requests to release stock. Configure Neon backup retention for your records. Uploaded photos are capped at 800 KB after compression and stored in PostgreSQL; large-scale usage should move images to object storage.
 

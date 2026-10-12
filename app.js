@@ -28,7 +28,15 @@ const paths = {
 };
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.box}</svg>`;
 let state, storageError = '', mode = 'shop', section = 'products', category = 'All delights', query = '', sort = 'featured', availableOnly = false;
-let deferredInstall, toastTimer;
+let deferredInstall, toastTimer, installDismissed = false;
+const standalone = window.matchMedia('(display-mode: standalone)');
+const isInstalled = () => standalone.matches || navigator.standalone === true;
+function installPromotion() {
+  const panel = $('#install-promotion');
+  panel.hidden = isInstalled() || installDismissed;
+  panel.innerHTML = `<div><strong>Gracious Delights on your phone</strong><span>Keep the menu and your requests one tap away.</span></div><button class="button primary" data-action="install">${icon('download')} ${deferredInstall ? 'Install app' : 'Get the app'}</button><button class="icon-button" data-action="dismiss-install" aria-label="Dismiss installation suggestion">${icon('close')}</button>`;
+  document.querySelectorAll('.install-button').forEach(button => { button.hidden = isInstalled(); });
+}
 state = {version:1,revision:0,products:[],ingredients:[],activity:[],orders:[],admin:false,myOrderIds:[]};
 let loading = true, refreshing = false, requestEpoch = 0;
 async function api(op, body) {
@@ -88,6 +96,7 @@ function footer() {
 }
 function render() {
   header(); footer();
+  installPromotion();
   $('#main').className = mode === 'admin' ? 'admin-main' : 'shop-main';
   if (loading) $('#main').innerHTML='<div class="empty-state"><h2>Opening the kitchen…</h2></div>'; else if (mode === 'admin') { if(state.admin)renderAdmin();else renderLogin(); } else renderShop();
   if (storageError) $('#main').insertAdjacentHTML('afterbegin', `<p class="storage-warning" role="alert">${esc(storageError)} <button data-action="retry" class="text-button">Retry</button></p>`);
@@ -260,9 +269,20 @@ function downloadBackup(){
   const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`gracious-delights-backup-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('Backup downloaded.');
 }
 function about(){openModal('Homemade. Heartfelt. Gracious.',`<div class="about-content"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><p>Gracious Delights is a food and beverage business in Binmaley, Philippines, sharing quality homemade cakes, snacks, and dishes.</p><p>From banana bread wedding souvenirs to food trays for the family, every gathering deserves a little delight.</p><div class="about-contact"><span>${icon('pin')} Binmaley, Philippines</span><a href="tel:+639060552414">${icon('phone')} 0906 055 2414</a></div><a class="button primary" href="${FB}" target="_blank" rel="noopener noreferrer">Explore the Facebook page ${icon('arrow')}</a><p class="help-note">Business information and photos sourced from the public Facebook page. Order directly from our website and follow your request in My requests.</p></div>`);}
-function install(){
-  if(deferredInstall){deferredInstall.prompt();deferredInstall.userChoice.then(()=>{deferredInstall=null;});return;}
-  openModal('Take your delights with you',`<div class="install-content">${icon('download')}<p>Install this app for quick access. An internet connection is required to see current stock, place orders, and manage the kitchen.</p><ol><li><strong>Chrome / Edge:</strong> open this address in your regular browser, then choose the install icon in the address bar or “Install app” from the browser menu.</li><li><strong>iPhone / iPad:</strong> use Safari’s Share menu, then “Add to Home Screen”.</li></ol><p class="help-note">Your order history is linked to this browser. Keep its cookies to continue tracking your requests.</p><button class="button secondary" data-action="close">Got it</button></div>`);
+async function install(){
+  if(isInstalled()){toast('Gracious Delights is already open as an app.');return;}
+  if(deferredInstall){
+    const prompt = deferredInstall;deferredInstall=null;installPromotion();
+    try {await prompt.prompt();await prompt.userChoice;return;} catch { /* Browser declined the prompt; show its manual installation path. */ }
+  }
+  const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  const embedded = /FBAN|FBAV|Instagram|Messenger|; wv\)/.test(navigator.userAgent);
+  const steps = embedded
+    ? '<li>Open the browser menu and choose <strong>Open in browser</strong>, or copy this website address into Chrome or Safari.</li><li>On Android, use the browser menu → <strong>Install app</strong> or <strong>Add to Home screen</strong>. On iPhone, use Share → <strong>Add to Home Screen</strong>.</li>'
+    : apple
+      ? '<li>Open this website in <strong>Safari</strong>.</li><li>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li><li>Confirm by tapping <strong>Add</strong>.</li>'
+      : '<li>Open this website in <strong>Chrome, Edge, or Samsung Internet</strong>.</li><li>Open the browser menu (⋮) and choose <strong>Install app</strong>, <strong>Install and create shortcut</strong>, or <strong>Add to Home screen</strong>.</li><li>Confirm the installation. If no option appears, keep the page open briefly and try again after reloading.</li>';
+  openModal('Install Gracious Delights',`<div class="install-content">${icon('download')}<p>Keep Gracious Delights on your home screen. An internet connection is required for current stock, ordering, and kitchen updates.</p><ol>${steps}</ol><p class="help-note">The browser controls whether an automatic install dialog is available. Your order history stays linked to the browser where you ordered; keep its cookies to track your requests.</p><button class="button secondary" data-action="close">Got it</button></div>`);
 }
 document.addEventListener('click',async e=>{
   const cat=e.target.closest('[data-category]');if(cat){category=cat.dataset.category;document.querySelectorAll('[data-category]').forEach(btn=>{btn.classList.toggle('active',btn===cat);btn.setAttribute('aria-pressed',String(btn===cat));});renderGrid();return;}
@@ -272,7 +292,8 @@ document.addEventListener('click',async e=>{
   if(action==='close')$('#modal').close();
   if(action==='detail')productDetail(id);
   if(action==='about')about();
-  if(action==='install')install();
+  if(action==='install')await install();
+  if(action==='dismiss-install'){installDismissed=true;installPromotion();}
   if(action==='clear-filters'){query='';category='All delights';availableOnly=false;renderShop();}
   if(action==='add-product')productForm();
   if(action==='edit-product')productForm(id);
@@ -299,8 +320,9 @@ function route(){
 window.addEventListener('hashchange',route);
 setInterval(refreshState,15000);
 window.addEventListener('focus',refreshState);
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;});
-window.addEventListener('appinstalled',()=>{deferredInstall=null;toast('Gracious Delights installed.');});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;installPromotion();});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;installDismissed=true;installPromotion();toast('Gracious Delights installed.');});
+standalone.addEventListener('change',installPromotion);
 for(const event of ['online','offline'])window.addEventListener(event,()=>{if(navigator.onLine)refreshState();footer();toast(navigator.onLine?'You’re back online.':'You are offline. Reconnect to place orders or update the kitchen.');});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>toast('App installation setup was unavailable. Please reload while online.'));
 route();
