@@ -17,5 +17,5 @@ The API tests use a real SQL engine locally. The local engine queues connections
 - Public API returned HTTP 200, `admin: false`, an empty catalog and no orders, with `Cache-Control: no-store`.
 - Signed-out admin mutation returned 403; incorrect login returned 401; a cross-origin mutation returned 403.
 - PWA manifest and service worker returned HTTP 200 with appropriate content types.
-- Browser displayed the storefront and protected admin sign-in form.
-- No sample products or orders were inserted. Successful owner sign-in and a complete real-product order/production flow still require the owner's kitchen setup and checks in DEPLOYMENT.md.
+- Browser displayed the storefront and protected admin sign-in form. The owner successfully signed in with their chosen password; the live Products workspace showed "Connected to kitchen".
+- No sample products or orders were inserted. A complete real-product order/production flow still requires the owner's kitchen setup and checks in DEPLOYMENT.md.
