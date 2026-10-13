@@ -3,6 +3,7 @@
 .vercel/
 node_modules/
 .test-data/
+admin/
 .env*
 *.zip
 *.docx

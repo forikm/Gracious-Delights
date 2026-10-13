@@ -8,4 +8,5 @@ dist/
 reviewer_work/
 previews/
 .test-data/
+admin/
 *.log
