@@ -6,7 +6,6 @@
     "start": "node --env-file-if-exists=.env.local server.mjs",
     "build": "node scripts/build.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
-    "admin:password": "node scripts/password.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": {

@@ -27,3 +27,11 @@ The API tests use a real SQL engine locally. The local engine queues connections
 - Added a prominent install panel and removed narrow-screen hiding of the install control. Tested panel visibility and manual-install instructions in a 320-pixel browser viewport. Actual Android Chrome native install-dialog availability is controlled by Chrome and still needs confirmation on the owner's phone.
 - Re-ran all 32 tests successfully and built the frontend. Local preview was used only for installation UI checks; its database was not configured.
 - Published deployment `EZcJPtkHkPGzHjDqaJ1pbrsqvn5N` reached READY at the existing production domain. Public requests confirmed the updated install panel, script, and v4 service worker. PWA icons served with valid 192×192 and 512×512 dimensions. The owner’s signed-in admin workspace displayed all six products and 30 units of stock.
+
+## Separate sites — October 13, 2026
+
+- Customer frontend no longer contains admin screens or login forms. Admin frontend contains only the kitchen workspace and a link to the separate customer menu.
+- The two server roles are fixed in lib/site.js in each repository; browser input cannot choose a role.
+- The integration test now uses two HTTP origins sharing an isolated PostgreSQL engine. It verifies customer orders reaching admin, copied-admin-cookie rejection on the customer site, admin checkout rejection and cross-site POST rejection, alongside the existing inventory and ownership checks.
+- All 32 tests and builds passed independently in both repositories.
+- Admin deployment 4fQXZ3DEX6uqaaDuQ99AcXNL6XyA reached READY at https://gracious-delights-admin.vercel.app/ and displayed the protected sign-in page. Customer production verification follows release.

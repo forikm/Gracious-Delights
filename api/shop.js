@@ -1,8 +1,9 @@
 import { getPool } from '../lib/db.js';
 import { cookies, cookie, digest, randomToken, verifyPassword } from '../lib/auth.js';
 import { readState, mutate, problem } from '../lib/store.js';
+import { SITE_ROLE } from '../lib/site.js';
 
-export function createHandler(getDb=getPool, env=process.env) {
+export function createHandler(getDb=getPool, env=process.env, role=SITE_ROLE) {
   return async function handler(req,res) {
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -11,6 +12,8 @@ export function createHandler(getDb=getPool, env=process.env) {
       const secure = !!env.VERCEL || env.APP_ORIGIN?.startsWith('https:');
       const url = new URL(req.url,'http://localhost');
       const op=url.searchParams.get('op') || 'state';
+      if (!['customer','admin'].includes(role)) throw problem(503,'Invalid site configuration.');
+      if (role==='customer' && ['login','logout'].includes(op)) throw problem(404,'Admin sign-in is available only on the admin website.');
       if (!['GET','POST'].includes(req.method)) throw problem(405,'Method not allowed.');
       if (req.method==='POST') {
         const origin = env.APP_ORIGIN || `${secure?'https':'http'}://${req.headers.host}`;
@@ -30,8 +33,8 @@ export function createHandler(getDb=getPool, env=process.env) {
       const setCookies=[];
       if (guest!==incoming.gd_guest) setCookies.push(cookie('gd_guest',guest,60*60*24*90,secure));
       const identity={owner:digest(guest),admin:false};
-      const credentialVersion=digest(`${env.ADMIN_EMAIL}:${env.ADMIN_PASSWORD_HASH}`);
-      if (/^[a-f0-9]{64}$/.test(incoming.gd_admin || '')) {
+      const credentialVersion=digest(`admin:${env.ADMIN_EMAIL}:${env.ADMIN_PASSWORD_HASH}`);
+      if (role==='admin' && /^[a-f0-9]{64}$/.test(incoming.gd_admin || '')) {
         identity.admin=!!(await db.query('SELECT token_hash FROM admin_sessions WHERE token_hash=$1 AND credential_version=$2 AND expires_at>now()',[digest(incoming.gd_admin),credentialVersion])).rows.length;
       }
       const rateLimit=async (scope,max) => {
@@ -54,6 +57,8 @@ export function createHandler(getDb=getPool, env=process.env) {
         if (!body || typeof body!=='object' || JSON.stringify(body).length>1200000) throw problem(413,'Request is too large.');
       }
       let result;
+      if (role==='admin' && ['state','mutate'].includes(op) && !identity.admin) throw problem(401,'Admin sign-in is required.');
+      if (role==='admin' && op==='mutate' && body.action?.type==='submitOrder') throw problem(403,'Place customer orders on the customer website.');
       if (op==='state' && req.method==='GET') result=await readState(db,identity);
       else if (op==='login' && req.method==='POST') {
         if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD_HASH) throw problem(503,'Admin sign-in has not been configured.');

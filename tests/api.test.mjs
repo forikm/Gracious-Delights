@@ -10,30 +10,41 @@ import { testDatabase } from './database-helper.mjs';
 test('database-backed customer/admin flow, access control, atomic inventory and retry safety',async t=>{
   const db=await testDatabase();
   const env={ADMIN_EMAIL:'owner@example.test',ADMIN_PASSWORD_HASH:await hashPassword('Testing-only-password-123!')};
-  const server=http.createServer(createHandler(()=>db,env));
+  const server=http.createServer(createHandler(()=>db,env,'customer'));
+  const adminEnv={...env};
+  const adminServer=http.createServer(createHandler(()=>db,adminEnv,'admin'));
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  await new Promise(resolve=>adminServer.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;env.APP_ORIGIN=origin;
-  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await db.close();});
-  const client=()=>{
+  const adminOrigin=`http://127.0.0.1:${adminServer.address().port}`;adminEnv.APP_ORIGIN=adminOrigin;
+  t.after(async()=>{await Promise.all([new Promise(resolve=>server.close(resolve)),new Promise(resolve=>adminServer.close(resolve))]);await db.close();});
+  const client=(site=origin)=>{
     const jar=new Map();
     return async(op,body,options={})=>{
-      const response=await fetch(`${origin}/api/shop?op=${op}`,{method:body?'POST':'GET',headers:{Cookie:[...jar].map(([k,v])=>`${k}=${v}`).join('; '),...(body?{'Content-Type':'application/json',Origin:options.origin||origin}:{})},body:body?JSON.stringify(body):undefined});
+      const response=await fetch(`${site}/api/shop?op=${op}`,{method:body?'POST':'GET',headers:{Cookie:options.cookie||[...jar].map(([k,v])=>`${k}=${v}`).join('; '),...(body?{'Content-Type':'application/json',Origin:options.origin||site}:{})},body:body?JSON.stringify(body):undefined});
       for(const c of response.headers.getSetCookie()){const [name,value]=c.split(';')[0].split('=');jar.set(name,value);}
       return {status:response.status,data:response.headers.get('content-type')?.includes('application/json')?await response.json():await response.arrayBuffer(),headers:response.headers};
     };
   };
-  const customer=client(),stranger=client(),admin=client();
+  const customer=client(),stranger=client(),admin=client(adminOrigin),signedOutAdmin=client(adminOrigin);
   const empty=await customer('state');assert.equal(empty.status,200);assert.deepEqual(empty.data.products,[]);
   assert.match(empty.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
   assert.equal((await customer('mutate',{action:{type:'addIngredient',ingredient:{name:'x'}},revision:0})).status,403);
-  assert.equal((await customer('login',{email:env.ADMIN_EMAIL,password:'wrong'})).status,401);
+  assert.equal((await customer('login',{email:env.ADMIN_EMAIL,password:'Testing-only-password-123!'})).status,404);
+  assert.equal((await signedOutAdmin('state')).status,401);
+  assert.equal((await signedOutAdmin('login',{email:env.ADMIN_EMAIL,password:'wrong'})).status,401);
   assert.equal((await admin('login',{email:env.ADMIN_EMAIL,password:'Testing-only-password-123!'},{origin:'https://attacker.example'})).status,403);
   let result=await admin('login',{email:env.ADMIN_EMAIL,password:'Testing-only-password-123!'});assert.equal(result.status,200);assert.equal(result.data.admin,true);
+  const adminCookie=result.headers.getSetCookie().find(c=>c.startsWith('gd_admin=')).split(';')[0];
+  assert.equal((await stranger('state',undefined,{cookie:adminCookie})).data.admin,false);
+  assert.equal((await stranger('mutate',{action:{type:'addIngredient'},revision:0},{cookie:adminCookie})).status,403);
   // Fixtures exist only inside this isolated test database.
   const seed=createSeed();await db.query('UPDATE shop_state SET data=$1::jsonb WHERE id=1',[JSON.stringify(seed)]);
   const stock=seed.products[0].stock,flour=seed.ingredients[0].quantity;
   const requestId=randomUUID();
   const action={type:'submitOrder',requestId,items:[{productId:'banana-loaf',quantity:2,unitPrice:180}],customer:{name:'Test Buyer',phone:'09060000000',fulfillment:'pickup'}};
+  assert.equal((await admin('mutate',{action})).status,403);
+  assert.equal((await admin('mutate',{action},{origin})).status,403);
   result=await customer('mutate',{action});assert.equal(result.status,200);assert.equal(result.data.orders.length,1);assert.equal(result.data.orders[0].total,360);
   assert.equal(result.data.products[0].stock,stock-2);assert.equal(available(result.data,result.data.products[0]),stock-2);
   assert.equal(result.data.ingredients.length,0);assert.equal(result.data.activity.length,0);assert.equal(result.data.products[0].recipe,undefined);assert.equal(result.data.orders[0].owner,undefined);
@@ -71,9 +82,9 @@ test('database-backed customer/admin flow, access control, atomic inventory and 
   result=await admin('mutate',{action:{type:'editProduct',id:'banana-loaf',product:{...snapshot.products[0],image}},revision:snapshot.revision});assert.equal(result.status,200);
   const imageUrl=result.data.products[0].image;assert.match(imageUrl,/^\/api\/shop\?op=image/);
   const img=await fetch(origin+imageUrl);assert.equal(img.status,200);assert.equal(img.headers.get('content-type'),'image/png');
-  await admin('logout',{});assert.equal((await admin('state')).data.admin,false);
-  assert.equal((await admin('mutate',{action:{type:'produce',id:'banana-loaf',quantity:1},revision:result.data.revision})).status,403);
-  for(let i=0;i<10;i++)result=await stranger('login',{email:'bad',password:'bad'});
+  await admin('logout',{});assert.equal((await admin('state')).status,401);
+  assert.equal((await admin('mutate',{action:{type:'produce',id:'banana-loaf',quantity:1},revision:result.data.revision})).status,401);
+  for(let i=0;i<10;i++)result=await signedOutAdmin('login',{email:'bad',password:'bad'});
   assert.equal(result.status,429);
 });
 

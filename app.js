@@ -1,4 +1,4 @@
-import { requirements, capacity, MAX_STOCK, round, available, reserved } from './domain.js';
+import { available } from './domain.js';
 import { createOrderingUI } from './orders-ui.js';
 
 
@@ -75,21 +75,13 @@ async function commit(action, expectedRevision) {
   try { state=await api('mutate',{action,revision:expectedRevision});storageError='';render(); }
   catch(error) { await refreshState(); throw error; }
 }
-function renderLogin() {
-  $('#main').innerHTML = '<section class="login-panel"><p class="eyebrow">THE KITCHEN</p><h1>Admin sign in</h1><p>Manage orders, products, and ingredients.</p><form id="login-form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p id="login-error" role="alert" class="form-error"></p><button class="button primary" type="submit">Sign in</button></form></section>';
-  $('#login-form').addEventListener('submit',async e=>{
-    e.preventDefault();const btn=e.submitter;btn.disabled=true;const form=new FormData(e.target);
-    try {requestEpoch++;state=await api('login',{email:form.get('email'),password:form.get('password')});storageError='';render();}
-    catch(error){$('#login-error').textContent=error.message;btn.disabled=false;}
-  });
-}
 function stockBadge(p) {
   const qty=available(state,p);
   return `<span class="stock ${qty === 0 ? 'sold-out' : qty <= 3 ? 'low' : ''}"><span class="dot"></span>${qty === 0 ? 'Sold out' : `${qty} available`}</span>`;
 }
 const categories = () => [...new Set(state.products.filter(p => p.active).map(p => p.category))];
 function header() {
-  $('#header').innerHTML = `<div class="header-inner"><a class="brand" href="#shop" aria-label="Gracious Delights home"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><span>Gracious Delights<small>HOMEMADE WITH LOVE</small></span></a><nav aria-label="Main navigation"><a href="#shop" class="${mode === 'shop' ? 'selected' : ''}">Our menu</a><button class="nav-link about-link" data-action="about">Our story</button></nav><div class="header-actions"><button class="my-requests-button" data-action="my-orders" aria-label="My requests">${icon('book')}<span>My requests</span></button><button class="basket-button" data-action="cart" aria-label="Basket, ${ordering.count()} items">${icon('box')}<span>Basket</span><b>${ordering.count()}</b></button><button class="install-button" data-action="install" aria-label="Get the app">${icon('download')}<span>Get the app</span></button><a class="admin-link ${mode === 'admin' ? 'selected' : ''}" href="#admin/products" aria-label="Admin">${icon('shield')}<span>Admin</span>${ordering.pendingCount()?`<b class="pending-count">${ordering.pendingCount()}</b>`:''}</a></div></div>`;
+  $('#header').innerHTML = `<div class="header-inner"><a class="brand" href="#shop" aria-label="Gracious Delights home"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><span>Gracious Delights<small>HOMEMADE WITH LOVE</small></span></a><nav aria-label="Main navigation"><a href="#shop" class="${mode === 'shop' ? 'selected' : ''}">Our menu</a><button class="nav-link about-link" data-action="about">Our story</button></nav><div class="header-actions"><button class="my-requests-button" data-action="my-orders" aria-label="My requests">${icon('book')}<span>My requests</span></button><button class="basket-button" data-action="cart" aria-label="Basket, ${ordering.count()} items">${icon('box')}<span>Basket</span><b>${ordering.count()}</b></button><button class="install-button" data-action="install" aria-label="Get the app">${icon('download')}<span>Get the app</span></button></div></div>`;
 }
 function footer() {
   $('#footer').innerHTML = `<div class="footer-inner"><span>Gracious Delights <span class="subtle">· Homemade in Binmaley</span></span><span class="footer-links"><a href="${FB}" target="_blank" rel="noopener noreferrer">Find us on Facebook ↗</a><span id="connection" class="connection">${navigator.onLine ? 'Online' : 'Offline'}</span></span></div><p class="demo-note">Homemade in Binmaley · Orders are confirmed by our kitchen.</p>`;
@@ -98,7 +90,7 @@ function render() {
   header(); footer();
   installPromotion();
   $('#main').className = mode === 'admin' ? 'admin-main' : 'shop-main';
-  if (loading) $('#main').innerHTML='<div class="empty-state"><h2>Opening the kitchen…</h2></div>'; else if (mode === 'admin') { if(state.admin)renderAdmin();else renderLogin(); } else renderShop();
+  if (loading) $('#main').innerHTML='<div class="empty-state"><h2>Opening the kitchen…</h2></div>'; else renderShop();
   if (storageError) $('#main').insertAdjacentHTML('afterbegin', `<p class="storage-warning" role="alert">${esc(storageError)} <button data-action="retry" class="text-button">Retry</button></p>`);
 }
 function renderShop() {
@@ -126,27 +118,6 @@ function renderGrid() {
   $('#result-count').textContent = `${products.length} ${products.length === 1 ? 'delight' : 'delights'} to discover`;
   $('#product-grid').innerHTML = products.length ? products.map(p => `<article class="product-card ${available(state,p) === 0 ? 'unavailable' : ''}"><button class="product-photo" data-action="detail" data-id="${p.id}" aria-label="View ${esc(p.name)}"><img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy">${stockBadge(p)}</button><div class="product-info"><p class="product-category">${esc(p.category)}</p><h3><button data-action="detail" data-id="${p.id}">${esc(p.name)}</button></h3><p class="product-description">${esc(p.description)}</p><div class="card-bottom"><div class="price">${money(p.price)}<span>${esc(p.portion || 'per product')}</span></div><button class="add-to-basket" data-action="add-cart" data-id="${p.id}" aria-label="Add ${esc(p.name)} to basket" ${available(state,p)===0?'disabled':''}>${icon('plus')} Add</button></div></div></article>`).join('') : `<div class="empty-state">${icon('search')}<h3>No delights found</h3><p>Try another search or category.</p><button class="button secondary" data-action="clear-filters">Clear filters</button></div>`;
 }
-function renderAdmin() {
-  const labels = { orders:['Orders','Customer requests, ready for your reply.'], products:['Products','Your homemade collection, all in one place.'], inventory:['Ingredient inventory','Keep your kitchen ready for the next batch.'], recipes:['Recipes','The ingredients behind every delight.'], activity:['Activity log','A clear record of every kitchen update.'], settings:['Backups','Keep a copy of your shop records.'] };
-  const tabs = [['orders','book','Orders'],['products','box','Products'],['inventory','leaf','Ingredients'],['recipes','book','Recipes'],['activity','history','Activity log'],['settings','download','Backups']];
-  const lowIngredients = state.ingredients.filter(i => i.quantity <= i.threshold);
-  $('#main').innerHTML = `<div class="admin-layout"><aside class="admin-sidebar"><p class="eyebrow">THE KITCHEN</p><h2>Admin workspace</h2><nav aria-label="Admin navigation">${tabs.map(([key,ico,label]) => `<a href="#admin/${key}" class="${section === key ? 'active' : ''}" ${section === key ? 'aria-current="page"' : ''}>${icon(ico)}${label}${key === 'orders' && ordering.pendingCount()?`<span class="nav-count">${ordering.pendingCount()}</span>`:''}${key === 'inventory' && lowIngredients.length ? `<span class="nav-count">${lowIngredients.length}</span>` : ''}</a>`).join('')}</nav><div class="sidebar-note">${icon('shield')}<strong>Kitchen admin</strong><p>Orders and inventory sync with the database.</p><button class="text-button" data-action="logout">Sign out</button><a href="#shop">View customer menu ↗</a></div></aside><section class="admin-content"><div class="admin-topline"><span>WORKSPACE / ${esc(labels[section][0].toUpperCase())}</span><span class="local-pill"><span class="dot"></span>Connected to kitchen</span></div><div class="admin-heading"><div><h1>${labels[section][0]}</h1><p>${labels[section][1]}</p></div>${section === 'products' ? `<button class="button primary" data-action="add-product">${icon('plus')} Add product</button>` : section === 'inventory' ? `<button class="button primary" data-action="add-ingredient">${icon('plus')} Add ingredient</button>` : ''}</div><div id="admin-body"></div></section></div>`;
-  const body = $('#admin-body');
-  if (section === 'orders') {
-    body.innerHTML=ordering.adminOrders();ordering.wireAdmin();
-  } else if (section === 'products') {
-    body.innerHTML = `<div class="stats-grid"><div class="stat"><span>Products on the menu</span><strong>${state.products.filter(p => p.active).length}<small>published delights</small></strong>${icon('box')}</div><div class="stat"><span>Ready to enjoy</span><strong>${state.products.reduce((n,p)=>n+p.stock,0)}<small>units in stock</small></strong>${icon('cake')}</div><div class="stat"><span>Running low</span><strong>${state.products.filter(p=>p.stock<=3).length}<small>products · 3 units or fewer</small></strong>${icon('history')}</div></div><div class="info-banner">${icon('leaf')}<span><strong>Inventory that follows your recipes.</strong> Producing stock deducts ingredients automatically. Each product holds a maximum of 19 units.</span></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Can make</th><th>Actions</th></tr></thead><tbody>${state.products.map(p=>`<tr><td><div class="table-product"><img src="${esc(p.image)}" alt=""><div><strong>${esc(p.name)}</strong><small>${esc(p.category)}${p.active?'':' · Hidden'}</small></div></div></td><td>${money(p.price)}</td><td>${stockBadge(p)}<small class="reserved-stock">${p.stock} on hand${reserved(state,p.id)?` · ${reserved(state,p.id)} reserved`:''}</small></td><td><span class="make-capacity">${capacity(state,p)} units</span></td><td><div class="table-actions"><button class="small-button" data-action="produce" data-id="${p.id}" ${capacity(state,p)===0?'disabled':''}>${icon('plus')} Stock</button><button class="icon-button" data-action="edit-product" data-id="${p.id}" aria-label="Edit ${esc(p.name)}">${icon('edit')}</button></div></td></tr>`).join('')}</tbody></table></div>`;
-  } else if (section === 'inventory') {
-    body.innerHTML = `<div class="stats-grid"><div class="stat"><span>Kitchen essentials</span><strong>${state.ingredients.length}<small>tracked ingredients</small></strong>${icon('leaf')}</div><div class="stat"><span>Need replenishing</span><strong>${lowIngredients.length}<small>at or below their threshold</small></strong>${icon('history')}</div><div class="stat"><span>Base units</span><strong class="units-stat">g / ml / pcs<small>used in all recipes</small></strong>${icon('book')}</div></div>${lowIngredients.length?`<div class="info-banner warning">${icon('history')}<span><strong>Time for a kitchen restock.</strong> ${lowIngredients.map(i=>esc(i.name)).join(', ')} ${lowIngredients.length===1?'is':'are'} running low.</span></div>`:''}<div class="table-wrap"><table><thead><tr><th>Ingredient</th><th>On hand</th><th>Low stock at</th><th>Status</th><th>Actions</th></tr></thead><tbody>${state.ingredients.map(i=>`<tr><td><strong>${esc(i.name)}</strong></td><td><strong>${number(i.quantity)}</strong> <span class="subtle">${i.unit}</span></td><td>${number(i.threshold)} ${i.unit}</td><td><span class="stock ${i.quantity<=i.threshold?'low':''}"><span class="dot"></span>${i.quantity<=i.threshold?'Low stock':'Healthy'}</span></td><td><div class="table-actions"><button class="small-button" data-action="receive" data-id="${i.id}">${icon('plus')} Receive</button><button class="icon-button" data-action="adjust-ingredient" data-id="${i.id}" aria-label="Adjust ${esc(i.name)}">${icon('edit')}</button></div></td></tr>`).join('')}</tbody></table></div><p class="help-note">Enter weights in grams and liquids in milliliters. Example: 1 kg = 1,000 g. Piece quantities must be whole numbers.</p>`;
-  } else if (section === 'recipes') {
-    body.innerHTML = `<div class="info-banner">${icon('book')}<span><strong>One recipe = one sellable unit.</strong> For a platter or pack, include ingredients for the whole platter or pack. Changes apply to future production.</span></div><div class="recipe-grid">${state.products.map(p=>`<article class="recipe-card"><div class="recipe-card-header"><img src="${esc(p.image)}" alt=""><div><h3>${esc(p.name)}</h3><p>${esc(p.portion || '1 sellable unit')}</p></div></div><dl>${p.recipe.map(r=>{const i=state.ingredients.find(i=>i.id===r.ingredientId);return `<div><dt>${esc(i.name)}</dt><dd>${number(r.amount)} ${i.unit}</dd></div>`;}).join('')}</dl><button class="button secondary" data-action="edit-recipe" data-id="${p.id}">${icon('edit')} Edit recipe</button></article>`).join('')}</div>`;
-  } else if (section === 'activity') {
-    body.innerHTML = `<div class="activity-list">${state.activity.map(a=>`<article class="activity-item"><span class="activity-icon">${icon(a.type==='production'?'cake':a.type==='receipt'?'plus':a.type==='recipe'?'book':'history')}</span><div><h3>${esc(a.title)}</h3><time datetime="${a.at}">${new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short'}).format(new Date(a.at))}</time>${a.changes.length?`<div class="change-list">${a.changes.map(c=>`<span class="change ${c.amount<0?'negative':''}">${c.amount>0?'+':''}${number(c.amount)} ${c.unit} ${esc(c.name)}</span>`).join('')}</div>`:''}</div></article>`).join('')}</div>`;
-  } else {
-    body.innerHTML = '<div class="settings-card"><span class="eyebrow">SHOP RECORDS</span><h2>A little peace of mind.</h2><p>Orders, recipes, inventory, and product photos are stored in your shared database. This export contains current records; image files are held separately. Use Neon backups for complete recovery.</p><button class="button primary" data-action="export">Download JSON records</button></div><div class="settings-card"><h3>Kitchen setup</h3><p>Add ingredients with your actual quantities, then add products with verified prices and recipes. Stock production automatically deducts ingredients. New customer requests appear in Orders while this workspace is open.</p></div>';
-
-  }
-}
 function openModal(title, body, className = '') {
   const modal = $('#modal');
   modal.className = className;
@@ -170,103 +141,6 @@ function bindForm(handler) {
 function productDetail(id) {
   const p = state.products.find(p=>p.id===id);
   openModal(p.name, `<div class="detail-body"><img class="detail-photo" src="${esc(p.image)}" alt="${esc(p.name)}"><div class="detail-copy"><p class="product-category">${esc(p.category)}</p>${stockBadge(p)}<p>${esc(p.description)}</p><div class="detail-price">${money(p.price)}<small>${esc(p.portion || 'per product')}</small></div><div class="detail-order"><label>Quantity<input id="detail-quantity" type="number" min="1" max="${Math.max(1,available(state,p))}" step="1" value="1" ${available(state,p)===0?'disabled':''}></label><button class="button primary" data-action="detail-add" data-id="${p.id}" ${available(state,p)===0?'disabled':''}>${icon('plus')} Add to basket</button></div><p class="help-note">Order on this website. The admin will review your request and confirm arrangements.</p></div></div>`, 'detail-modal');
-}
-function recipeRows(recipe) {
-  return recipe.map(r=>recipeRow(r)).join('');
-}
-function recipeRow(r = {}) {
-  return `<div class="recipe-row"><label>Ingredient<select class="recipe-ingredient" required><option value="">Choose ingredient</option>${state.ingredients.map(i=>`<option value="${i.id}" ${r.ingredientId===i.id?'selected':''}>${esc(i.name)} (${i.unit})</option>`).join('')}</select></label><label>Quantity per unit<input class="recipe-amount" type="number" step="0.001" min="0.001" max="1000000000" value="${r.amount ?? ''}" placeholder="0" required></label><button class="icon-button remove-recipe" type="button" aria-label="Remove recipe ingredient">${icon('close')}</button></div>`;
-}
-function readRecipe() {
-  return [...$('#modal').querySelectorAll('.recipe-row')].map(row=>({ingredientId:row.querySelector('select').value,amount:Number(row.querySelector('input').value)}));
-}
-function wireRecipe() {
-  document.querySelectorAll('#recipe-rows .recipe-row').forEach(row=>{
-    const ingredient=state.ingredients.find(i=>i.id===row.querySelector('select').value);
-    if(ingredient?.unit==='pcs'){row.querySelector('input').step='1';row.querySelector('input').min='1';}
-  });
-  $('#add-recipe-row').addEventListener('click',()=> { $('#recipe-rows').insertAdjacentHTML('beforeend',recipeRow()); $('#recipe-rows').lastElementChild.querySelector('select').focus(); });
-  $('#recipe-rows').addEventListener('click', e=> { const button=e.target.closest('.remove-recipe'); if(button) button.closest('.recipe-row').remove(); });
-  $('#recipe-rows').addEventListener('change', e=>{ if(e.target.matches('select')){const i=state.ingredients.find(i=>i.id===e.target.value);const input=e.target.closest('.recipe-row').querySelector('input');input.step=i?.unit==='pcs'?'1':'0.001';input.min=i?.unit==='pcs'?'1':'0.001';} });
-}
-function recipeSection(recipe) {
-  return `<section class="recipe-editor"><div class="form-section-heading"><h3>Recipe per sellable unit</h3><button class="text-button" type="button" id="add-recipe-row">${icon('plus')} Ingredient</button></div><p class="help-note">Amounts for one loaf, cake, pack, or platter. Use each ingredient’s base unit.</p><div id="recipe-rows">${recipeRows(recipe)}</div></section>`;
-}
-const PHOTO_LIBRARY = [
-  ['a354c03220336924','Banana bread'],['d48aa4ba35954fb9','Chocolate cake'],['f86ca2cd7d4f8442','Ube cake'],['b511fbfde20f8301','Cookies'],['d63443ed617e749b','Lumpia'],['14989151db935458','Family tray']
-];
-function productForm(id, recipeOnly = false) {
-  const p = state.products.find(p=>p.id===id), revision=state.revision;
-  let selectedImage = p?.image || '';
-  if(recipeOnly){
-    openModal(`Recipe · ${p.name}`,`<form><div class="info-banner">${icon('book')}<span>Editing a recipe does not change existing stock or return ingredients. The new recipe is used for the next batch.</span></div>${recipeSection(p.recipe)}${formFooter('Save recipe')}</form>`);
-    wireRecipe();
-    bindForm(async()=>{await commit({type:'editProduct',id,product:{...p,recipe:readRecipe()}},revision);toast('Recipe saved for future batches.');});
-    return;
-  }
-  openModal(p ? 'Edit product' : 'Add a little delight', `<form><div class="form-grid"><label class="full">Product name<input name="name" value="${esc(p?.name||'')}" maxlength="120" required placeholder="e.g. Loaded Banana Bread"></label><label>Category<input name="category" list="category-list" value="${esc(p?.category||'')}" maxlength="60" required placeholder="Choose or create a category"><datalist id="category-list">${[...new Set(state.products.map(p=>p.category))].map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label><label>Price (₱)<input type="number" name="price" value="${p?.price||''}" min="0.01" max="1000000000" step="0.01" required placeholder="180.00"></label><label>Selling unit<input name="portion" value="${esc(p?.portion||'')}" maxlength="100" placeholder="e.g. 1 loaf"></label>${!p?`<label>Initial stock (0–19)<input type="number" name="stock" min="0" max="19" step="1" value="0" required></label>`:`<div class="stock-field"><span>Current stock</span><strong>${p.stock} units</strong><small>Add batches with the + Stock button.</small></div>`}<label class="full">Description<textarea name="description" maxlength="1000" rows="3" required placeholder="Tell customers what makes it special…">${esc(p?.description||'')}</textarea></label></div><section class="photo-editor"><h3>Product photo</h3><div class="photo-input"><img id="photo-preview" src="${esc(selectedImage || 'assets/placeholder.svg')}" alt="Product photo preview"><label class="upload-label">${icon('plus')} Upload your photo<input id="photo-upload" type="file" accept="image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP · up to 8 MB</small></label></div><p class="help-note">Or use a photo from the Facebook page:</p><div class="photo-library">${PHOTO_LIBRARY.map(([file,label])=>`<button type="button" class="library-photo ${selectedImage.includes(file)?'active':''}" data-photo="assets/facebook/${file}.jpg" aria-label="Use ${label} photo" aria-pressed="${selectedImage.includes(file)}"><img src="assets/facebook/${file}.jpg" alt="${label}"></button>`).join('')}</div><p id="upload-error" class="form-error" role="status"></p></section>${recipeSection(p?.recipe || [{ingredientId:'',amount:''}])}<div class="info-banner">${icon('leaf')}<span>${p?'Recipe changes apply to future batches.':'Initial stock will consume ingredients from the recipe above. Insufficient ingredients will block saving.'}</span></div>${p?`<div class="edit-actions"><button type="button" class="text-button" data-action="toggle-product" data-id="${p.id}">${p.active?'Hide from customer menu':'Publish on customer menu'}</button><button type="button" class="text-button danger-text" data-action="remove-stock" data-id="${p.id}" ${available(state,p)===0?'disabled':''}>Record sale / waste</button></div>`:''}${formFooter(p?'Save product':'Add product')}</form>`);
-  wireRecipe();
-  let uploadPending = false;
-  $('.photo-library').addEventListener('click', e=>{
-    const btn=e.target.closest('[data-photo]');if(!btn)return;
-    selectedImage=btn.dataset.photo;$('#photo-preview').src=selectedImage;$('#upload-error').textContent='';
-    document.querySelectorAll('.library-photo').forEach(b=>{b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn));});
-  });
-  $('#photo-upload').addEventListener('change',async e=>{
-    const file=e.target.files[0];if(!file)return;
-    uploadPending=true;$('#upload-error').textContent='Preparing photo…';
-    try{ selectedImage=await photoData(file);$('#photo-preview').src=selectedImage;$('#upload-error').textContent='Photo ready. Saved with this product.';document.querySelectorAll('.library-photo').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-pressed','false');}); }
-    catch(err){$('#upload-error').textContent=err.message;}
-    finally{uploadPending=false;}
-  });
-  bindForm(async data=>{
-    if(uploadPending)throw new Error('Please wait for the photo to finish processing.');
-    const product={name:data.get('name'),category:data.get('category'),price:Number(data.get('price')),portion:String(data.get('portion')).trim(),description:data.get('description'),image:selectedImage,recipe:readRecipe(),stock:p?p.stock:Number(data.get('stock'))};
-    await commit(p?{type:'editProduct',id,product}:{type:'addProduct',product},revision);
-    toast(p?'Product saved.':'Product added; ingredients deducted for initial stock.');
-  });
-}
-async function photoData(file) {
-  if(!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Use a JPEG, PNG, or WebP photo.');
-  if(file.size>8*1024*1024)throw new Error('Choose a photo smaller than 8 MB.');
-  const bitmap=await createImageBitmap(file).catch(()=>{throw new Error('This photo could not be read. Choose another image.');});
-  const ratio=Math.min(1,1000/Math.max(bitmap.width,bitmap.height));
-  const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*ratio);canvas.height=Math.round(bitmap.height*ratio);
-  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-  return canvas.toDataURL('image/jpeg',0.82);
-}
-function produceForm(id) {
-  const p=state.products.find(p=>p.id===id),revision=state.revision;
-  openModal(`Produce · ${p.name}`,`<form><p class="modal-description">Add a batch to the menu. Ingredients are deducted only when you confirm production.</p><div class="production-product"><img src="${esc(p.image)}" alt=""><div>${stockBadge(p)}<strong>Room for ${MAX_STOCK-p.stock} more units</strong><small>Ingredients available for ${capacity(state,p)} units</small></div></div><label>Units to produce<input id="batch-quantity" name="quantity" type="number" min="1" max="${MAX_STOCK-p.stock}" step="1" value="1" required></label><h3 class="preview-heading">Ingredient deduction preview</h3><div id="deduction-preview"></div>${formFooter('Produce & add stock')}</form>`);
-  function preview(){
-    try{const quantity=Number($('#batch-quantity').value);const rows=requirements(state,p.recipe,quantity);$('#deduction-preview').innerHTML=`<div class="table-wrap preview-table"><table><thead><tr><th>Ingredient</th><th>Needed</th><th>After batch</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.enough?'':'insufficient'}"><td>${esc(r.name)}</td><td>${number(r.required)} ${r.unit}</td><td>${number(r.remaining)} ${r.unit}${!r.enough?' · shortage':''}</td></tr>`).join('')}</tbody></table></div>`;}
-    catch(e){$('#deduction-preview').textContent=e.message;}
-  }
-  preview();$('#batch-quantity').addEventListener('input',preview);
-  bindForm(async data=>{await commit({type:'produce',id,quantity:Number(data.get('quantity'))},revision);toast('Batch produced. Product stock and ingredient inventory updated.');});
-}
-function ingredientForm(id, kind='add') {
-  const i=state.ingredients.find(i=>i.id===id),revision=state.revision;
-  const title=kind==='receive'?`Receive · ${i.name}`:kind==='adjust'?`Count · ${i.name}`:'Add ingredient';
-  let fields;
-  if(kind==='receive')fields=`<div class="info-banner">${icon('leaf')}<span>Currently on hand: <strong>${number(i.quantity)} ${i.unit}</strong>. Received inventory is added to this amount.</span></div><label>Quantity received (${i.unit})<input name="quantity" type="number" min="${i.unit==='pcs'?1:0.001}" step="${i.unit==='pcs'?1:0.001}" required autofocus placeholder="e.g. ${i.unit==='pcs'?24:1000}"></label>`;
-  else if(kind==='adjust')fields=`<p class="modal-description">Use a physical count to correct inventory. This adjustment will be recorded in the activity log.</p><div class="form-grid"><label>Corrected quantity (${i.unit})<input name="quantity" type="number" min="0" step="${i.unit==='pcs'?1:0.001}" value="${i.quantity}" required></label><label>Low stock threshold (${i.unit})<input name="threshold" type="number" min="0" step="${i.unit==='pcs'?1:0.001}" value="${i.threshold}" required></label><label class="full">Reason<input name="reason" maxlength="180" required placeholder="e.g. Physical count / spoilage"></label></div>`;
-  else fields=`<div class="form-grid"><label class="full">Ingredient name<input name="name" maxlength="120" required placeholder="e.g. All-purpose flour"></label><label>Base unit<select name="unit" id="ingredient-unit"><option value="g">Grams (g)</option><option value="ml">Milliliters (ml)</option><option value="pcs">Pieces (pcs)</option></select></label><label>Opening quantity<input name="quantity" type="number" min="0" step="0.001" required placeholder="1000"></label><label class="full">Low stock threshold<input name="threshold" type="number" min="0" step="0.001" value="0" required></label></div><p class="help-note">Use one base unit consistently. 1 kg = 1,000 g; 1 liter = 1,000 ml. Units are fixed after creation to keep recipes consistent.</p>`;
-  openModal(title,`<form>${fields}${formFooter(kind==='add'?'Add ingredient':kind==='receive'?'Receive inventory':'Save adjustment')}</form>`);
-  if(kind==='add')$('#ingredient-unit').addEventListener('change',e=>{document.querySelectorAll('#modal input[type="number"]').forEach(el=>el.step=e.target.value==='pcs'?'1':'0.001');});
-  bindForm(async data=>{
-    const action=kind==='add'?{type:'addIngredient',ingredient:{name:data.get('name'),unit:data.get('unit'),quantity:Number(data.get('quantity')),threshold:Number(data.get('threshold'))}}:kind==='receive'?{type:'receiveIngredient',id,quantity:Number(data.get('quantity'))}:{type:'adjustIngredient',id,quantity:Number(data.get('quantity')),threshold:Number(data.get('threshold')),reason:data.get('reason')};
-    await commit(action,revision);toast(kind==='add'?'Ingredient added.':'Ingredient inventory updated.');
-  });
-}
-function removeStockForm(id){
-  const p=state.products.find(p=>p.id===id),revision=state.revision;
-  openModal(`Record sale / waste · ${p.name}`,`<form><div class="info-banner"><span>${available(state,p)} unreserved units (${p.stock} total on hand). Ingredients have already been used; removing finished stock does not add them back.</span></div><div class="form-grid"><label>Units to remove<input name="quantity" type="number" min="1" max="${available(state,p)}" step="1" value="1" required></label><label>Reason<input name="reason" maxlength="180" required placeholder="e.g. Sold in store / expired"></label></div>${formFooter('Record stock change')}</form>`);
-  bindForm(async data=>{await commit({type:'removeStock',id,quantity:Number(data.get('quantity')),reason:data.get('reason')},revision);toast('Finished stock updated. Ingredients were not changed.');});
-}
-function downloadBackup(){
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`gracious-delights-backup-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('Backup downloaded.');
 }
 function about(){openModal('Homemade. Heartfelt. Gracious.',`<div class="about-content"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><p>Gracious Delights is a food and beverage business in Binmaley, Philippines, sharing quality homemade cakes, snacks, and dishes.</p><p>From banana bread wedding souvenirs to food trays for the family, every gathering deserves a little delight.</p><div class="about-contact"><span>${icon('pin')} Binmaley, Philippines</span><a href="tel:+639060552414">${icon('phone')} 0906 055 2414</a></div><a class="button primary" href="${FB}" target="_blank" rel="noopener noreferrer">Explore the Facebook page ${icon('arrow')}</a><p class="help-note">Business information and photos sourced from the public Facebook page. Order directly from our website and follow your request in My requests.</p></div>`);}
 async function install(){
@@ -295,24 +169,12 @@ document.addEventListener('click',async e=>{
   if(action==='install')await install();
   if(action==='dismiss-install'){installDismissed=true;installPromotion();}
   if(action==='clear-filters'){query='';category='All delights';availableOnly=false;renderShop();}
-  if(action==='add-product')productForm();
-  if(action==='edit-product')productForm(id);
-  if(action==='edit-recipe')productForm(id,true);
-  if(action==='produce')produceForm(id);
-  if(action==='add-ingredient')ingredientForm();
-  if(action==='receive')ingredientForm(id,'receive');
-  if(action==='adjust-ingredient')ingredientForm(id,'adjust');
-  if(action==='remove-stock')removeStockForm(id);
-  if(action==='toggle-product'){try{await commit({type:'toggleProduct',id},state.revision);$('#modal').close();toast('Product visibility updated.');}catch(err){$('#form-error').textContent=err.message;}}
-  if(action==='export')downloadBackup();
-  if(action==='logout'){try{requestEpoch++;state=await api('logout',{});$('#modal').close();render();}catch(error){toast(error.message);}}
   if(action==='retry')await refreshState();
 });
 $('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=$('#modal').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('#modal').close();}});
 function route(){
   const hash=location.hash;
-  if(hash.startsWith('#admin')){mode='admin';const next=hash.split('/')[1];section=['orders','products','inventory','recipes','activity','settings'].includes(next)?next:'products';}
-  else mode='shop';
+  mode='shop';
   if($('#modal').open)$('#modal').close();
   render();
   if(hash==='#menu')requestAnimationFrame(()=>$('#menu')?.scrollIntoView({behavior:'smooth'}));else window.scrollTo(0,0);

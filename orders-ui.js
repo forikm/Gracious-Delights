@@ -53,12 +53,6 @@ export function createOrderingUI(ui) {
     const mine=orders().filter(o=>getState().myOrderIds.includes(o.id));
     openModal('My order requests',mine.length?`<div class="my-orders">${mine.map(o=>`<article class="my-order"><div class="order-heading"><div><strong>${o.reference}</strong><small>${date(o)}</small></div>${status(o)}</div>${itemSummary(o)}<p class="help-note">${o.customer.fulfillment==='pickup'?'Pickup in Binmaley':'Delivery requested · fee to be confirmed'}${o.customer.address?`<br>${esc(o.customer.address)}`:''}</p>${o.adminNote?`<p class="admin-order-note"><strong>From the admin:</strong> ${esc(o.adminNote)}</p>`:''}${o.status==='pending'?`<button class="text-button danger-text" data-action="cancel-request" data-id="${o.id}">Cancel this request</button>`:''}</article>`).join('')}</div>`:`<div class="empty-state">${icon('book')}<h3>No requests yet</h3><p>Your requests from this browser will appear here. Keep your browser cookies to retain access.</p><button class="button primary" data-action="close">Browse delights</button></div>`);
   }
-  function adminOrders(){
-    const all=orders(),active=all.filter(o=>['accepted','ready'].includes(o.status));
-    const shown=all.filter(o=>filter==='all'||(filter==='active'?['accepted','ready'].includes(o.status):o.status===filter));
-    return `<div class="stats-grid"><div class="stat"><span>Waiting for your reply</span><strong>${pendingCount()}<small>new order requests</small></strong>${icon('history')}</div><div class="stat"><span>In the kitchen</span><strong>${active.length}<small>accepted or ready orders</small></strong>${icon('cake')}</div><div class="stat"><span>Order history</span><strong>${all.length}<small>requests received</small></strong>${icon('book')}</div></div><div class="info-banner">${icon('box')}<span><strong>Stock is reserved for open requests.</strong> Accepting keeps the reservation; completion deducts finished stock once. Declining or cancelling releases it. Ingredients are already accounted for during production.</span></div><div class="orders-toolbar"><h2>Order inbox</h2><label>Show <select id="order-filter"><option value="pending" ${filter==='pending'?'selected':''}>Pending approval</option><option value="active" ${filter==='active'?'selected':''}>Accepted & ready</option><option value="completed" ${filter==='completed'?'selected':''}>Completed</option><option value="all" ${filter==='all'?'selected':''}>All requests</option></select></label></div><div id="orders-list">${shown.length?shown.map(o=>`<article class="admin-order-card" data-order-id="${o.id}"><div class="order-heading"><div><strong>${o.reference}</strong><small>${date(o)}</small></div>${status(o)}</div><div class="admin-order-columns"><div class="order-customer"><h3>${esc(o.customer.name)}</h3><a href="tel:${esc(o.customer.phone.replace(/[^+\d]/g,''))}">${icon('phone')}${esc(o.customer.phone)}</a><p><strong>${o.customer.fulfillment==='pickup'?'Pickup':'Delivery requested'}</strong>${o.customer.address?`<br>${esc(o.customer.address)}`:''}</p>${o.customer.notes?`<p class="customer-notes">${esc(o.customer.notes)}</p>`:''}</div>${itemSummary(o)}</div>${o.adminNote?`<p class="admin-order-note"><strong>Admin note:</strong> ${esc(o.adminNote)}</p>`:''}<div class="order-actions">${o.status==='pending'?`<button class="button primary" data-action="order-status" data-id="${o.id}" data-status="accepted">Accept request ${icon('check')}</button><button class="button secondary" data-action="order-status" data-id="${o.id}" data-status="declined">Decline</button>`:o.status==='accepted'?`<button class="button primary" data-action="order-status" data-id="${o.id}" data-status="ready">Mark ready</button>`:o.status==='ready'?`<button class="button primary" data-action="order-status" data-id="${o.id}" data-status="completed">Complete order ${icon('check')}</button>`:''}${['accepted','ready'].includes(o.status)?`<button class="text-button danger-text" data-action="order-status" data-id="${o.id}" data-status="cancelled">Cancel order</button>`:''}</div></article>`).join(''):`<div class="empty-state">${icon('book')}<h3>${filter==='pending'?'The kitchen is all caught up':'No orders in this view'}</h3><p>${filter==='pending'?'New customer requests will appear here.':'Choose another filter to view the order history.'}</p></div>`}</div><p class="help-note">The inbox updates automatically every 15 seconds while open.</p>`;
-  }
-  function wireAdmin(){ $('#order-filter')?.addEventListener('change',e=>{filter=e.target.value;$('#admin-body').innerHTML=adminOrders();wireAdmin();}); }
   function updateOrder(id,next,actor='admin'){
     const order=orders().find(o=>o.id===id);if(!order)return;
     if(actor==='customer'&&!getState().myOrderIds.includes(id))return;
@@ -70,7 +64,7 @@ export function createOrderingUI(ui) {
   }
   function refresh(){
     if(!$('#modal').open)return;
-    if($('#order-filter'))wireAdmin();
+
     if($('#modal .my-orders'))showRequests();
     else if($('#modal .basket-list'))showCart();
   }
@@ -93,8 +87,8 @@ export function createOrderingUI(ui) {
       for(const row of cart){const p=getState().products.find(p=>p.id===row.productId);if(p)row.unitPrice=p.price;}
       save();showCart();toast('Basket prices updated. Please review the total.');
     }
-    if(action==='order-status')updateOrder(id,el.dataset.status);
+
     if(action==='cancel-request')updateOrder(id,'cancelled','customer');
   }
-  return {count,pendingCount,adminOrders,wireAdmin,handleAction,refresh};
+  return {count,pendingCount,handleAction,refresh};
 }
