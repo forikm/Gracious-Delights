@@ -30,7 +30,7 @@ export function bindCheckoutMap(form, savedPin) {
     addressField.hidden = address.disabled = !delivery;
     address.required = delivery;
     title.textContent = delivery ? 'Delivery location' : 'Shop pickup location';
-    hint.textContent = delivery ? 'Tap the drop-off spot, drag the map, or use the arrow buttons. Then confirm the pin.' : 'Pick up your order at Gracious Delights in Binmaley, Pangasinan.';
+    hint.textContent = delivery ? 'Tap your drop-off spot or move the map with the arrows. Then confirm your pin.' : 'Pick up your order at Gracious Delights in Binmaley, Pangasinan.';
     pin.hidden = confirm.hidden = controls.hidden = !delivery;
     link.hidden = true;
     refresh();
