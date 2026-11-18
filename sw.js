@@ -1,4 +1,4 @@
-const CACHE = 'gracious-delights-shell-v17';
+const CACHE = 'gracious-delights-shell-v18';
 const FILES = [
   './', './index.html', './styles.css', './orders.css', './app.js', './interaction.js', './domain.js', './menu-catalog.js', './product-photos.js', './announcements.js', './announcements.css', './catalog-view.js', './orders-ui.js', './checkout-map.js', './manifest.webmanifest',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',

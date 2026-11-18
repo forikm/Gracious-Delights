@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalogGroups,variantLabels} from '../catalog-view.js';
 import {createSeed,transition,available} from '../domain.js';
+import {SHOP_CATEGORIES, SWEET_BREADS, COOKIES, SAVORY_MEALS, CAKES} from '../menu-catalog.js';
 
 test('groups all selling options without losing flavor, size, price, or stock identity',()=>{
  const state=transition(createSeed(),{type:'importSignCatalog'});
@@ -15,8 +16,16 @@ test('groups all selling options without losing flavor, size, price, or stock id
  assert.ok(groups.slice(0,5).every(g=>g.stock>0));
  assert.ok(groups.slice(5).every(g=>g.stock===0));
  assert.equal(catalogGroups(state,{inStock:true}).length,5);
- const match=catalogGroups(state,{query:'Oreo',category:'Ensaymada'});
- assert.equal(match.length,1);assert.ok(match[0].matches.some(p=>p.id==='sign-ensaymada-oreo'));
+ assert.deepEqual(new Set(groups.map(group=>group.category)), new Set(SHOP_CATEGORIES));
+ const match=catalogGroups(state,{query:'Oreo',category:SWEET_BREADS});
+ assert.deepEqual(match.map(group=>group.id), ['family-ensaymada','family-cinnamon']);
+ assert.ok(match[0].matches.some(p=>p.id==='sign-ensaymada-oreo'));
+ assert.deepEqual(catalogGroups(state,{category:COOKIES}).map(group=>group.id), ['cookies','family-crinkles','family-cookies']);
+ assert.deepEqual(catalogGroups(state,{category:SAVORY_MEALS}).map(group=>group.id), ['lumpia','family-tray']);
+ assert.deepEqual(catalogGroups(state,{category:CAKES}).map(group=>group.id), ['chocolate-cake','ube-cake','family-yema']);
+ const banana = catalogGroups(state,{category:SWEET_BREADS}).find(group=>group.id==='family-banana');
+ assert.equal(banana.optionLabel, 'Product');
+ assert.deepEqual(variantLabels(banana.variants.find(p=>p.id==='sign-banana-squares-pack-6')),{flavor:'Banana Squares',size:'6 pieces'});
  assert.equal(catalogGroups(state,{query:'does not exist'}).length,0);
  assert.equal(available(state,state.products.find(p=>p.id==='sign-ensaymada-oreo')),0);
 });

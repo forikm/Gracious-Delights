@@ -1,3 +1,4 @@
+import { SHOP_CATEGORIES } from './menu-catalog.js';
 import { dialogControls, focusHeading, rememberFocus } from './interaction.js';
 import { renderAnnouncements, sortedAnnouncements } from './announcements.js';
 import { catalogGroups, variantLabels } from './catalog-view.js';
@@ -96,7 +97,6 @@ function stockBadge(p) {
   const qty=available(state,p);
   return `<span class="stock ${qty === 0 ? 'sold-out' : qty <= 3 ? 'low' : ''}"><span class="dot"></span>${qty === 0 ? 'Sold out' : `${qty} available`}</span>`;
 }
-const categories = () => [...new Set(state.products.filter(p => p.active).map(p => p.category))];
 function header() {
   const restoreFocus = rememberFocus($('#header'));
   $('#header').innerHTML = `<div class="header-inner"><a class="brand" href="#shop" aria-label="Gracious Delights home"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><span>Gracious Delights<small>HOMEMADE WITH LOVE</small></span></a><nav aria-label="Main navigation"><a href="#menu" class="${mode === 'shop' ? 'selected' : ''}" ${mode==='shop'?'aria-current="page"':''}>Our menu</a><a href="#announcements" class="${mode==='announcements'?'selected':''}" ${mode==='announcements'?'aria-current="page"':''}>Announcements</a><button class="nav-link about-link" data-action="about">Our story</button></nav><div class="header-actions"><button class="my-requests-button" data-action="my-orders" aria-label="My requests">${icon('book')}<span>My requests</span></button><button class="basket-button" data-action="cart" aria-label="Basket, ${ordering.count()} items">${icon('box')}<span>Basket</span><b>${ordering.count()}</b></button><button class="install-button" data-action="install" aria-label="Get the app">${icon('download')}<span>Get the app</span></button></div></div><nav class="mobile-shop-nav" aria-label="Shop pages"><a href="#menu" ${mode==='shop'?'aria-current="page"':''}>Menu</a><a href="#announcements" ${mode==='announcements'?'aria-current="page"':''}>Announcements</a></nav>`;
@@ -115,14 +115,14 @@ function render() {
   restoreFocus();
 }
 function renderShop() {
-  if (category !== 'All delights' && !categories().includes(category)) category = 'All delights';
+  if (category !== 'All delights' && !SHOP_CATEGORIES.includes(category)) category = 'All delights';
   $('#main').innerHTML = `
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy"><h1 id="hero-title">Homemade treats.<br><em>Made in Binmaley.</em></h1><p>Ensaymada, cinnamon rolls, cakes, and banana bread.</p><a class="button primary" href="#menu">Shop the menu ${icon('arrow')}</a><div class="hero-meta"><span>${icon('pin')} Binmaley, Pangasinan</span></div></div>
     <div class="hero-visual"><img class="hero-photo" src="assets/facebook/a354c03220336924.jpg" alt="Gracious Delights banana bread topped with nuts and chocolate"></div>
   </section>
   ${sortedAnnouncements((state.announcements||[]).filter(item=>item.published)).slice(0,1).map(item=>`<aside class="latest-announcement" aria-label="Latest announcement"><span>From the kitchen</span><a href="#announcements">${esc(item.title)} →</a></aside>`).join('')}<section class="menu-section" id="menu" aria-labelledby="menu-title"><div class="section-title"><h2 id="menu-title">Our menu</h2></div>
-    <label class="mobile-category">Browse by category<select id="mobile-category" aria-label="Product category">${['All delights',...categories()].map(c=>`<option value="${esc(c)}" ${c===category?'selected':''}>${esc(c)}</option>`).join('')}</select></label><div class="categories" role="group" aria-label="Product categories">${['All delights', ...categories()].map((c,i) => `<button class="category ${c === category ? 'active' : ''}" data-category="${esc(c)}" aria-pressed="${c === category}">${icon(['grid','leaf','cake','box','book'][i] || 'box')}${esc(c)}<span>${catalogGroups(state,{category:c}).length}</span></button>`).join('')}</div>
+    <label class="mobile-category">Browse by category<select id="mobile-category" aria-label="Product category">${['All delights',...SHOP_CATEGORIES].map(c=>`<option value="${esc(c)}" ${c===category?'selected':''}>${esc(c)}</option>`).join('')}</select></label><div class="categories" role="group" aria-label="Product categories">${['All delights', ...SHOP_CATEGORIES].map((c,i) => `<button class="category ${c === category ? 'active' : ''}" data-category="${esc(c)}" aria-pressed="${c === category}">${icon(['grid','leaf','cake','box','book'][i] || 'box')}${esc(c)}<span>${catalogGroups(state,{category:c}).length}</span></button>`).join('')}</div>
     <div class="catalog-toolbar"><label class="search">${icon('search')}<input id="catalog-search" type="search" placeholder="Search the menu" aria-label="Search the menu" value="${esc(query)}"></label><div class="catalog-options"><label class="checkbox-label"><input id="available-filter" type="checkbox" ${availableOnly ? 'checked' : ''}> In stock only</label><label class="sort-label">Sort by <select id="catalog-sort" aria-label="Sort products"><option value="featured" ${sort === 'featured' ? 'selected' : ''}>Featured</option><option value="price-asc" ${sort === 'price-asc' ? 'selected' : ''}>Price: low to high</option><option value="price-desc" ${sort === 'price-desc' ? 'selected' : ''}>Price: high to low</option><option value="name" ${sort === 'name' ? 'selected' : ''}>Name: A–Z</option></select></label></div></div>
     <div class="availability-note"><span>${catalogGroups(state,{inStock:true}).length} products available to order now</span><button class="text-button" data-action="how-to-order">Pickup & delivery information ${icon('arrow')}</button></div><p id="result-count" class="result-count" aria-live="polite"></p><div id="product-grid" class="product-grid"></div>
   </section><section class="story-strip"><div class="story-icon">${icon('heart')}</div><div><h3>Good food brings us together.</h3><p>Cakes for milestones. Snacks for little breaks. Trays for the whole family.</p></div><button class="text-button" data-action="about">Meet Gracious Delights ${icon('arrow')}</button></section>`;
@@ -147,7 +147,7 @@ function productDetail(id, selectedId) {
     || group.variants.find(p => available(state, p) > 0) || group.variants[0];
   const flavors = [...new Set(group.variants.map(p => variantLabels(p).flavor))];
   const fields = group.variants.length > 1 ? `<div class="variant-fields">
-    <label>${group.category === 'Banana Bread' ? 'Product' : 'Flavor'}
+    <label>${group.optionLabel}
       <select id="product-flavor">${flavors.map(flavor => `<option>${esc(flavor)}</option>`).join('')}</select>
     </label>
     <label>Size or pack<select id="product-size"></select></label>
