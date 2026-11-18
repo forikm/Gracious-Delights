@@ -30,6 +30,8 @@ test('database-backed customer/admin flow, access control, atomic inventory and 
   const empty=await customer('state');assert.equal(empty.status,200);assert.deepEqual(empty.data.products,[]);
   assert.match(empty.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
   assert.equal((await customer('mutate',{action:{type:'addIngredient',ingredient:{name:'x'}},revision:0})).status,403);
+  assert.equal((await customer('mutate',{action:{type:'importSignCatalog'},revision:0})).status,403);
+  assert.equal((await customer('mutate',{action:{type:'applyProductPhotos'},revision:0})).status,403);
   assert.equal((await customer('login',{email:env.ADMIN_EMAIL,password:'Testing-only-password-123!'})).status,404);
   assert.equal((await signedOutAdmin('state')).status,401);
   assert.equal((await signedOutAdmin('login',{email:env.ADMIN_EMAIL,password:'wrong'})).status,401);
@@ -42,13 +44,22 @@ test('database-backed customer/admin flow, access control, atomic inventory and 
   const seed=createSeed();await db.query('UPDATE shop_state SET data=$1::jsonb WHERE id=1',[JSON.stringify(seed)]);
   const stock=seed.products[0].stock,flour=seed.ingredients[0].quantity;
   const requestId=randomUUID();
-  const action={type:'submitOrder',requestId,items:[{productId:'banana-loaf',quantity:2,unitPrice:180}],customer:{name:'Test Buyer',phone:'09060000000',fulfillment:'pickup'}};
+  const action={type:'submitOrder',requestId,trackingCode:'b'.repeat(64),items:[{productId:'banana-loaf',quantity:2,unitPrice:180}],customer:{name:'Test Buyer',phone:'09060000000',fulfillment:'pickup'}};
   assert.equal((await admin('mutate',{action})).status,403);
   assert.equal((await admin('mutate',{action},{origin})).status,403);
   result=await customer('mutate',{action});assert.equal(result.status,200);assert.equal(result.data.orders.length,1);assert.equal(result.data.orders[0].total,360);
   assert.equal(result.data.products[0].stock,stock-2);assert.equal(available(result.data,result.data.products[0]),stock-2);
   assert.equal(result.data.ingredients.length,0);assert.equal(result.data.activity.length,0);assert.equal(result.data.products[0].recipe,undefined);assert.equal(result.data.orders[0].owner,undefined);
   assert.deepEqual(result.data.myOrderIds,[requestId]);
+  assert.equal(result.data.orders[0].trackingHash,undefined);
+  const reference=result.data.orders[0].reference;
+  assert.equal((await stranger('track',{reference,code:'c'.repeat(64)})).status,404);
+  const tracked=await stranger('track',{reference,code:action.trackingCode});
+  assert.equal(tracked.status,200);assert.equal(tracked.data.status,'pending');
+  assert.equal(tracked.data.total,360);assert.equal(tracked.data.owner,undefined);
+  assert.equal(tracked.data.trackingHash,undefined);assert.equal(tracked.data.customer.phone,undefined);
+  assert.equal((await stranger('track',{reference:'GD-9999',code:action.trackingCode})).status,404);
+  assert.equal((await stranger('state')).data.orders.length,0);
   assert.equal((await customer('mutate',{action})).data.orders.length,1);
   assert.equal((await stranger('state')).data.orders.length,0);
   assert.equal((await stranger('mutate',{action})).status,409);
@@ -64,6 +75,7 @@ test('database-backed customer/admin flow, access control, atomic inventory and 
   }
   assert.equal(snapshot.products[0].stock,stock-2);assert.equal(snapshot.ingredients[0].quantity,flour);
   assert.equal((await customer('state')).data.orders[0].status,'completed');
+  assert.equal((await stranger('track',{reference,code:action.trackingCode})).data.status,'completed');
   result=await admin('mutate',{action:{type:'updateOrder',id:requestId,status:'completed'},revision:snapshot.revision});assert.equal(result.status,400);
   result=await admin('mutate',{action:{type:'produce',id:'banana-loaf',quantity:1},revision:snapshot.revision});assert.equal(result.status,200);snapshot=result.data;
   assert.equal(snapshot.ingredients[0].quantity,flour-200);

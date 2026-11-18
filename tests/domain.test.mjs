@@ -163,7 +163,15 @@ test('checkout validates contact details, delivery addresses, and item quantitie
   assert.throws(()=>transition(s,{...action,items:[]}),/basket is empty/);
   assert.throws(()=>transition(s,{...action,items:[{...action.items[0],quantity:1.5}]}),/whole number/);
   assert.throws(()=>transition(s,{...action,items:[action.items[0],action.items[0]]}),/only once/);
-  const next=transition(s,{...action,customer:{...action.customer,fulfillment:'delivery',address:'Demo street, Binmaley'}});assert.equal(next.orders[0].customer.address,'Demo street, Binmaley');
+  const delivery={...action.customer,fulfillment:'delivery',address:'Demo street, Binmaley'};
+  assert.throws(()=>transition(s,{...action,customer:delivery}),/delivery pin/);
+  assert.throws(()=>transition(s,{...action,customer:{...delivery,location:{lat:91,lng:120.25}}}),/delivery pin/);
+  const location={lat:16.035889,lng:120.254583};
+  const next=transition(s,{...action,customer:{...delivery,location}});
+  assert.equal(next.orders[0].customer.address,delivery.address);
+  assert.deepEqual(next.orders[0].customer.location,location);
+  const pickup=transition(s,{...action,customer:{...action.customer,location}});
+  assert.equal(pickup.orders[0].customer.location,undefined);
 });
 test('hidden products cannot be ordered, and production still caps physical stock at 19',()=>{
   const s=createSeed();s.products[0].active=false;assert.throws(()=>transition(s,request()),/no longer available/);

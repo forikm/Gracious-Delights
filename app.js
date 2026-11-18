@@ -1,3 +1,8 @@
+import { dialogControls, focusHeading, rememberFocus } from './interaction.js';
+import { renderAnnouncements, sortedAnnouncements } from './announcements.js';
+import { catalogGroups, variantLabels } from './catalog-view.js';
+import { mapLink, pickupLocation } from './checkout-map.js';
+import { productPhoto } from './product-photos.js';
 import { available } from './domain.js';
 import { createOrderingUI } from './orders-ui.js';
 
@@ -33,7 +38,7 @@ const standalone = window.matchMedia('(display-mode: standalone)');
 const isInstalled = () => standalone.matches || navigator.standalone === true;
 function installPromotion() {
   const panel = $('#install-promotion');
-  panel.hidden = isInstalled() || installDismissed;
+  panel.hidden = true;
   panel.innerHTML = `<div><strong>Gracious Delights on your phone</strong><span>Keep the menu and your requests one tap away.</span></div><button class="button primary" data-action="install">${icon('download')} ${deferredInstall ? 'Install app' : 'Get the app'}</button><button class="icon-button" data-action="dismiss-install" aria-label="Dismiss installation suggestion">${icon('close')}</button>`;
   document.querySelectorAll('.install-button').forEach(button => { button.hidden = isInstalled(); });
 }
@@ -41,8 +46,11 @@ state = {version:1,revision:0,products:[],ingredients:[],activity:[],orders:[],a
 let loading = true, refreshing = false, requestEpoch = 0;
 async function api(op, body) {
   let response;
-  try { response = await fetch('/api/shop?op='+op, {method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}); }
-  catch { throw new Error('Unable to reach the kitchen. Reconnect and try again. Your request has not been confirmed.'); }
+  try { response = await fetch('/api/shop?op='+op, {method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout?.(30000)}); }
+  catch (error) {
+    if (error.name === 'TimeoutError') throw new Error('The kitchen did not respond in time. Check the request status or try again.');
+    throw new Error('Unable to reach the kitchen. Check your connection and try again.');
+  }
   const data = await response.json().catch(()=>({error:'The server returned an unexpected response.'}));
   if (!response.ok) throw new Error(data.error || 'Unable to complete this request.');
   return data;
@@ -59,12 +67,21 @@ async function refreshState() {
     const recovered=!!storageError || loading;
     if(state.admin && !next.admin)$('#modal').close();
     state=next;storageError='';loading=false;
-    if(changed || recovered){render();ordering.refresh();if(newOrder)toast('New order request received. Open Orders to review.');}
+    if(changed || recovered){render();if (recovered && location.hash === '#menu' && window.scrollY === 0) showMenu(false);ordering.refresh();if(newOrder)toast('New order request received. Open Orders to review.');}
   } catch(error) {if(epoch===requestEpoch){storageError=error.message;loading=false;render();}}
   finally {refreshing=false;}
 }
-const ordering=createOrderingUI({getState:()=>state,commit,openModal,bindForm,formFooter,toast,header,money,esc,icon});
+const dialogs = dialogControls($('#modal'), {
+  escape: esc, checkIcon: icon('check'), closeIcon: icon('close'),
+  fallback: () => $('[data-action="cart"]') || $('#main')
+});
+const {openModal, bindForm, formFooter} = dialogs;
+const ordering=createOrderingUI({getState:()=>state,commit,openModal,bindForm,formFooter,toast,header,money,esc,icon,api});
 function toast(message) {
+  if ($('#modal').open && !dialogs.isBusy()) {
+    $('#modal .dialog-status').textContent = message;
+    return;
+  }
   $('#toast').textContent = message;
   $('#toast').classList.add('visible');
   clearTimeout(toastTimer);
@@ -81,68 +98,121 @@ function stockBadge(p) {
 }
 const categories = () => [...new Set(state.products.filter(p => p.active).map(p => p.category))];
 function header() {
-  $('#header').innerHTML = `<div class="header-inner"><a class="brand" href="#shop" aria-label="Gracious Delights home"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><span>Gracious Delights<small>HOMEMADE WITH LOVE</small></span></a><nav aria-label="Main navigation"><a href="#shop" class="${mode === 'shop' ? 'selected' : ''}">Our menu</a><button class="nav-link about-link" data-action="about">Our story</button></nav><div class="header-actions"><button class="my-requests-button" data-action="my-orders" aria-label="My requests">${icon('book')}<span>My requests</span></button><button class="basket-button" data-action="cart" aria-label="Basket, ${ordering.count()} items">${icon('box')}<span>Basket</span><b>${ordering.count()}</b></button><button class="install-button" data-action="install" aria-label="Get the app">${icon('download')}<span>Get the app</span></button></div></div>`;
+  const restoreFocus = rememberFocus($('#header'));
+  $('#header').innerHTML = `<div class="header-inner"><a class="brand" href="#shop" aria-label="Gracious Delights home"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><span>Gracious Delights<small>HOMEMADE WITH LOVE</small></span></a><nav aria-label="Main navigation"><a href="#menu" class="${mode === 'shop' ? 'selected' : ''}" ${mode==='shop'?'aria-current="page"':''}>Our menu</a><a href="#announcements" class="${mode==='announcements'?'selected':''}" ${mode==='announcements'?'aria-current="page"':''}>Announcements</a><button class="nav-link about-link" data-action="about">Our story</button></nav><div class="header-actions"><button class="my-requests-button" data-action="my-orders" aria-label="My requests">${icon('book')}<span>My requests</span></button><button class="basket-button" data-action="cart" aria-label="Basket, ${ordering.count()} items">${icon('box')}<span>Basket</span><b>${ordering.count()}</b></button><button class="install-button" data-action="install" aria-label="Get the app">${icon('download')}<span>Get the app</span></button></div></div><nav class="mobile-shop-nav" aria-label="Shop pages"><a href="#menu" ${mode==='shop'?'aria-current="page"':''}>Menu</a><a href="#announcements" ${mode==='announcements'?'aria-current="page"':''}>Announcements</a></nav>`;
+  restoreFocus();
 }
 function footer() {
-  $('#footer').innerHTML = `<div class="footer-inner"><span>Gracious Delights <span class="subtle">· Homemade in Binmaley</span></span><span class="footer-links"><a href="${FB}" target="_blank" rel="noopener noreferrer">Find us on Facebook ↗</a><span id="connection" class="connection">${navigator.onLine ? 'Online' : 'Offline'}</span></span></div><p class="demo-note">Homemade in Binmaley · Orders are confirmed by our kitchen.</p>`;
+  $('#footer').innerHTML = `<div class="footer-inner"><span>Gracious Delights <span class="subtle">· Homemade in Binmaley</span></span><span class="footer-links"><a href="${FB}" target="_blank" rel="noopener noreferrer">Find us on Facebook ↗</a><span id="connection" class="connection">${navigator.onLine ? 'Online' : 'Offline'}</span></span></div><p class="demo-note">Homemade in Binmaley · Orders are confirmed by our kitchen. <a href="#announcements">Announcements</a> · <button class="text-button shop-policy" data-action="how-to-order">Pickup & delivery</button> · <button class="text-button shop-policy" data-action="policy">Terms and privacy</button></p>`;
 }
 function render() {
+  const restoreFocus = rememberFocus(document);
   header(); footer();
   installPromotion();
   $('#main').className = mode === 'admin' ? 'admin-main' : 'shop-main';
-  if (loading) $('#main').innerHTML='<div class="empty-state"><h2>Opening the kitchen…</h2></div>'; else renderShop();
+  if (loading) $('#main').innerHTML='<div class="empty-state"><h2>Opening the kitchen…</h2></div>'; else if(mode==='announcements')renderAnnouncements($('#main'),state.announcements);else renderShop();
   if (storageError) $('#main').insertAdjacentHTML('afterbegin', `<p class="storage-warning" role="alert">${esc(storageError)} <button data-action="retry" class="text-button">Retry</button></p>`);
+  restoreFocus();
 }
 function renderShop() {
   if (category !== 'All delights' && !categories().includes(category)) category = 'All delights';
   $('#main').innerHTML = `
   <section class="hero" aria-labelledby="hero-title">
-    <div class="hero-copy"><p class="eyebrow"><span class="tiny-line"></span> FROM OUR KITCHEN, WITH LOVE</p><h1 id="hero-title">Little delights.<br><em>Lovely moments.</em></h1><p>Homemade treats and hearty favorites,<br class="desktop-break"> lovingly prepared for you and the people you love.</p><a class="button primary" href="#menu">Explore the menu ${icon('arrow')}</a><div class="hero-meta"><span>${icon('leaf')} Homemade goodness</span><span>${icon('pin')} Binmaley, Pangasinan</span></div></div>
-    <div class="hero-visual"><img class="hero-photo" src="assets/facebook/a354c03220336924.jpg" alt="Gracious Delights banana bread topped with nuts and chocolate"><div class="photo-label"><span class="script">Baked with love</span><span>SHARED WITH JOY</span></div><div class="hero-photo-caption"><span>THE HOMEMADE COLLECTION</span><span>01 / 06</span></div></div>
+    <div class="hero-copy"><p class="eyebrow"><span class="tiny-line"></span> FROM OUR KITCHEN, WITH LOVE</p><h1 id="hero-title">Homemade treats.<br><em>Made in Binmaley.</em></h1><p>Ensaymada, cinnamon rolls, cakes, and banana bread from our kitchen to your table.</p><a class="button primary" href="#menu">Shop the menu ${icon('arrow')}</a><div class="hero-meta"><span>${icon('leaf')} Homemade goodness</span><span>${icon('pin')} Binmaley, Pangasinan</span></div></div>
+    <div class="hero-visual"><img class="hero-photo" src="assets/facebook/a354c03220336924.jpg" alt="Gracious Delights banana bread topped with nuts and chocolate"><div class="photo-label"><span class="script">Baked with love</span><span>SHARED WITH JOY</span></div><div class="hero-photo-caption"><span>THE HOMEMADE COLLECTION</span><span>GRACIOUS DELIGHTS</span></div></div>
   </section>
-  <section class="menu-section" id="menu" aria-labelledby="menu-title"><div class="section-title"><div><p class="eyebrow">SOMETHING FOR EVERY CRAVING</p><h2 id="menu-title">What sounds good today?</h2></div><span class="batch-note">${icon('heart')} Small batches. Big love.</span></div>
-    <div class="categories" role="group" aria-label="Product categories">${['All delights', ...categories()].map((c,i) => `<button class="category ${c === category ? 'active' : ''}" data-category="${esc(c)}" aria-pressed="${c === category}">${icon(['grid','leaf','cake','box','book'][i] || 'box')}${esc(c)}<span>${state.products.filter(p => p.active && (c === 'All delights' || p.category === c)).length}</span></button>`).join('')}</div>
+  ${sortedAnnouncements((state.announcements||[]).filter(item=>item.published)).slice(0,1).map(item=>`<aside class="latest-announcement" aria-label="Latest announcement"><span>From the kitchen</span><a href="#announcements">${esc(item.title)} →</a></aside>`).join('')}<section class="menu-section" id="menu" aria-labelledby="menu-title"><div class="section-title"><div><p class="eyebrow">SOMETHING FOR EVERY CRAVING</p><h2 id="menu-title">What sounds good today?</h2></div><span class="batch-note">${icon('heart')} Small batches. Big love.</span></div>
+    <label class="mobile-category">Browse by category<select id="mobile-category" aria-label="Product category">${['All delights',...categories()].map(c=>`<option value="${esc(c)}" ${c===category?'selected':''}>${esc(c)}</option>`).join('')}</select></label><div class="categories" role="group" aria-label="Product categories">${['All delights', ...categories()].map((c,i) => `<button class="category ${c === category ? 'active' : ''}" data-category="${esc(c)}" aria-pressed="${c === category}">${icon(['grid','leaf','cake','box','book'][i] || 'box')}${esc(c)}<span>${catalogGroups(state,{category:c}).length}</span></button>`).join('')}</div>
     <div class="catalog-toolbar"><label class="search">${icon('search')}<input id="catalog-search" type="search" placeholder="Find your next favorite…" aria-label="Search products" value="${esc(query)}"></label><div class="catalog-options"><label class="checkbox-label"><input id="available-filter" type="checkbox" ${availableOnly ? 'checked' : ''}> In stock only</label><label class="sort-label">Sort by <select id="catalog-sort" aria-label="Sort products"><option value="featured" ${sort === 'featured' ? 'selected' : ''}>Featured</option><option value="price-asc" ${sort === 'price-asc' ? 'selected' : ''}>Price: low to high</option><option value="price-desc" ${sort === 'price-desc' ? 'selected' : ''}>Price: high to low</option><option value="name" ${sort === 'name' ? 'selected' : ''}>Name: A–Z</option></select></label></div></div>
-    <p id="result-count" class="result-count" aria-live="polite"></p><div id="product-grid" class="product-grid"></div>
+    <div class="availability-note"><span>${catalogGroups(state,{inStock:true}).length} products available to order now</span><button class="text-button" data-action="how-to-order">Pickup & delivery information ${icon('arrow')}</button></div><p id="result-count" class="result-count" aria-live="polite"></p><div id="product-grid" class="product-grid"></div>
   </section><section class="story-strip"><div class="story-icon">${icon('heart')}</div><div><h3>Good food brings us together.</h3><p>Cakes for milestones. Snacks for little breaks. Trays for the whole family.</p></div><button class="text-button" data-action="about">Meet Gracious Delights ${icon('arrow')}</button></section>`;
   renderGrid();
+  $('#mobile-category').addEventListener('change',e=>{category=e.target.value;renderGrid();document.querySelectorAll('[data-category]').forEach(btn=>{btn.classList.toggle('active',btn.dataset.category===category);btn.setAttribute('aria-pressed',String(btn.dataset.category===category));});});
   $('#catalog-search').addEventListener('input', e => { query = e.target.value; renderGrid(); });
   $('#available-filter').addEventListener('change', e => { availableOnly = e.target.checked; renderGrid(); });
   $('#catalog-sort').addEventListener('change', e => { sort = e.target.value; renderGrid(); });
 }
 function renderGrid() {
-  let products = state.products.filter(p => p.active && (category === 'All delights' || p.category === category) && (!availableOnly || available(state,p) > 0) && `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query.toLowerCase().trim()));
-  if (sort === 'price-asc') products.sort((a,b) => a.price-b.price);
-  if (sort === 'price-desc') products.sort((a,b) => b.price-a.price);
-  if (sort === 'name') products.sort((a,b) => a.name.localeCompare(b.name));
-  $('#result-count').textContent = `${products.length} ${products.length === 1 ? 'delight' : 'delights'} to discover`;
-  $('#product-grid').innerHTML = products.length ? products.map(p => `<article class="product-card ${available(state,p) === 0 ? 'unavailable' : ''}"><button class="product-photo" data-action="detail" data-id="${p.id}" aria-label="View ${esc(p.name)}"><img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy">${stockBadge(p)}</button><div class="product-info"><p class="product-category">${esc(p.category)}</p><h3><button data-action="detail" data-id="${p.id}">${esc(p.name)}</button></h3><p class="product-description">${esc(p.description)}</p><div class="card-bottom"><div class="price">${money(p.price)}<span>${esc(p.portion || 'per product')}</span></div><button class="add-to-basket" data-action="add-cart" data-id="${p.id}" aria-label="Add ${esc(p.name)} to basket" ${available(state,p)===0?'disabled':''}>${icon('plus')} Add</button></div></div></article>`).join('') : `<div class="empty-state">${icon('search')}<h3>No delights found</h3><p>Try another search or category.</p><button class="button secondary" data-action="clear-filters">Clear filters</button></div>`;
+  const groups=catalogGroups(state,{category,query,inStock:availableOnly,sort});
+  $('#result-count').textContent=`${groups.length} ${groups.length===1?'product':'products'} · Choose a product for flavors and sizes`;
+  $('#product-grid').innerHTML=groups.length?groups.map(g=>{
+    const multiple=g.variants.length>1;
+    return `<article class="product-card ${g.stock?'':'unavailable'}"><button class="product-photo" data-action="detail" data-id="${esc(g.id)}" data-variant="${esc(g.photo.id)}" aria-label="View ${esc(g.name)}">${productPhoto(g.photo,'',true)}<span class="stock ${g.stock?'':'sold-out'}"><span class="dot"></span>${g.stock?'Available now':'Currently unavailable'}</span></button><div class="product-info"><p class="product-category">${esc(g.category)}</p><h3><button data-action="detail" data-id="${esc(g.id)}" data-variant="${esc(g.photo.id)}">${esc(g.name)}</button></h3><p class="product-description">${esc(g.description)}</p><div class="card-bottom"><div class="price">${g.minPrice!==g.maxPrice?'<small>From </small>':''}${money(g.minPrice)}<span>${multiple?g.variants.length+' options':esc(g.photo.portion||'per product')}</span></div><button class="add-to-basket" data-action="${multiple||!g.stock?'detail':'add-cart'}" data-id="${esc(multiple||!g.stock?g.id:g.photo.id)}" data-variant="${esc(g.photo.id)}" aria-label="${multiple?'Choose options for ':g.stock?'Add ':'View '}${esc(g.name)}">${multiple?'Choose options':g.stock?'Add':'View'}</button></div></div></article>`;
+  }).join(''):'<div class="empty-state"><h3>No matching products</h3><p>Try another search or view the complete menu.</p><button class="button primary" data-action="clear-filters">View all products</button></div>';
 }
-function openModal(title, body, className = '') {
-  const modal = $('#modal');
-  modal.className = className;
-  modal.innerHTML = `<div class="modal-top"><div><p class="eyebrow">GRACIOUS DELIGHTS</p><h2 id="modal-title">${esc(title)}</h2></div><button class="icon-button close-modal" data-action="close" aria-label="Close dialog">${icon('close')}</button></div>${body}`;
-  if (!modal.open) modal.showModal();
+function productDetail(id, selectedId) {
+  const group = catalogGroups(state).find(g => g.id === id || g.variants.some(p => p.id === id));
+  if (!group) return;
+  let selected = group.variants.find(p => p.id === (selectedId || id))
+    || group.variants.find(p => available(state, p) > 0) || group.variants[0];
+  const flavors = [...new Set(group.variants.map(p => variantLabels(p).flavor))];
+  const fields = group.variants.length > 1 ? `<div class="variant-fields">
+    <label>${group.category === 'Banana Bread' ? 'Product' : 'Flavor'}
+      <select id="product-flavor">${flavors.map(flavor => `<option>${esc(flavor)}</option>`).join('')}</select>
+    </label>
+    <label>Size or pack<select id="product-size"></select></label>
+  </div>` : '';
+  openModal(group.name, `<div class="detail-body">
+    <p class="product-category">${esc(group.category)}</p>
+    <div class="detail-selection-photo"></div>
+    <div class="detail-selection-copy">
+      ${fields}
+      <h3 id="variant-name"></h3>
+      <div id="variant-summary" class="variant-summary" role="status" aria-atomic="true"></div>
+      <p id="variant-description"></p>
+      <div id="variant-actions"></div>
+    </div>
+  </div>`, 'detail-modal');
+
+  const flavorControl = $('#product-flavor');
+  const sizeControl = $('#product-size');
+  const optionsFor = flavor => group.variants.filter(p => variantLabels(p).flavor === flavor);
+  function updateSizes() {
+    const {flavor} = variantLabels(selected);
+    flavorControl.value = flavor;
+    sizeControl.innerHTML = optionsFor(flavor).map(p =>
+      `<option value="${esc(p.id)}">${esc(variantLabels(p).size)} · ${money(p.price)}${available(state, p) ? '' : ' · Unavailable'}</option>`
+    ).join('');
+    sizeControl.value = selected.id;
+  }
+  function updateSelection() {
+    const stock = available(state, selected);
+    $('.detail-selection-photo').innerHTML = productPhoto(selected, 'detail-photo');
+    $('#variant-name').textContent = selected.name;
+    $('#variant-description').textContent = selected.description;
+    $('#variant-summary').innerHTML = `${stockBadge(selected)}<div class="detail-price">${money(selected.price)}<small>${esc(selected.portion || 'per product')}</small></div>`;
+    $('#variant-actions').innerHTML = stock
+      ? `<div class="detail-order"><label>Quantity<input id="detail-quantity" type="number" min="1" max="${stock}" step="1" value="1" required></label><button class="button primary" data-action="detail-add" data-id="${esc(selected.id)}">Add to basket</button></div>`
+      : `<p class="availability-message">${fields ? 'Choose another option or ask the kitchen about availability.' : 'Ask the kitchen about availability.'}</p><a class="button secondary" href="${FB}" target="_blank" rel="noopener noreferrer">Contact the kitchen ↗</a>`;
+  }
+  // Keep the native selects mounted so changing an option preserves keyboard focus.
+  if (flavorControl) {
+    updateSizes();
+    flavorControl.addEventListener('change', () => {
+      const options = optionsFor(flavorControl.value);
+      const {size} = variantLabels(selected);
+      selected = options.find(p => variantLabels(p).size === size)
+        || options.find(p => available(state, p) > 0) || options[0];
+      updateSizes();
+      updateSelection();
+    });
+    sizeControl.addEventListener('change', () => {
+      selected = group.variants.find(p => p.id === sizeControl.value);
+      updateSelection();
+    });
+  }
+  updateSelection();
 }
-function formFooter(label) {
-  return `<p class="form-error" role="alert" id="form-error"></p><div class="modal-actions"><button class="button secondary" type="button" data-action="close">Cancel</button><button class="button primary" type="submit">${esc(label)} ${icon('check')}</button></div>`;
-}
-function bindForm(handler) {
-  $('#modal form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn = e.submitter;
-    if (btn) btn.disabled = true;
-    $('#form-error').textContent = '';
-    try { const close=await handler(new FormData(e.target)); if(close!==false)$('#modal').close(); }
-    catch(err) { $('#form-error').textContent = err.message; $('#form-error').scrollIntoView({block:'nearest'}); }
-    finally { if (btn) btn.disabled = false; }
-  });
-}
-function productDetail(id) {
-  const p = state.products.find(p=>p.id===id);
-  openModal(p.name, `<div class="detail-body"><img class="detail-photo" src="${esc(p.image)}" alt="${esc(p.name)}"><div class="detail-copy"><p class="product-category">${esc(p.category)}</p>${stockBadge(p)}<p>${esc(p.description)}</p><div class="detail-price">${money(p.price)}<small>${esc(p.portion || 'per product')}</small></div><div class="detail-order"><label>Quantity<input id="detail-quantity" type="number" min="1" max="${Math.max(1,available(state,p))}" step="1" value="1" ${available(state,p)===0?'disabled':''}></label><button class="button primary" data-action="detail-add" data-id="${p.id}" ${available(state,p)===0?'disabled':''}>${icon('plus')} Add to basket</button></div><p class="help-note">Order on this website. The admin will review your request and confirm arrangements.</p></div></div>`, 'detail-modal');
-}
+function howToOrder(){openModal('Pickup & delivery',`<div class="ordering-guide"><ol><li><strong>Choose your treats.</strong> Select a flavor and pack size, then add available products to your basket.</li><li><strong>Choose pickup or request delivery.</strong> Pickup uses the shop location. For delivery, enter your address and confirm your map pin.</li><li><strong>Send your request.</strong> The kitchen confirms your order and arrangements. Delivery availability and any fee are confirmed before fulfillment.</li></ol><a class="button secondary" href="${mapLink(pickupLocation)}" target="_blank" rel="noopener noreferrer">Directions to the pickup location ↗</a><p>Need to check an item or delivery area? <a href="${FB}" target="_blank" rel="noopener noreferrer">Contact Gracious Delights on Facebook ↗</a></p><p class="help-note">Submitting a request does not take a payment. Payment is arranged with the kitchen.</p></div>`);}
 function about(){openModal('Homemade. Heartfelt. Gracious.',`<div class="about-content"><img src="assets/facebook/a00aff175be206dd.jpg" alt="Gracious Delights logo"><p>Gracious Delights is a food and beverage business in Binmaley, Philippines, sharing quality homemade cakes, snacks, and dishes.</p><p>From banana bread wedding souvenirs to food trays for the family, every gathering deserves a little delight.</p><div class="about-contact"><span>${icon('pin')} Binmaley, Philippines</span><a href="tel:+639060552414">${icon('phone')} 0906 055 2414</a></div><a class="button primary" href="${FB}" target="_blank" rel="noopener noreferrer">Explore the Facebook page ${icon('arrow')}</a><p class="help-note">Business information and photos sourced from the public Facebook page. Order directly from our website and follow your request in My requests.</p></div>`);}
+function showPolicy(){
+  openModal('Terms and privacy',`<div class="about-content shop-policy">
+    <h3>Terms of use</h3>
+    <p>Checkout submits an order request. The kitchen confirms the order, payment, and any delivery fee.</p>
+    <h3>Privacy policy</h3>
+    <p>Gracious Delights uses the contact details, address, and map pin you submit to arrange and fulfill your order. A browser cookie links your requests to this device. The checkout map displays tiles from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>.</p>
+  </div>`);
+}
 async function install(){
   if(isInstalled()){toast('Gracious Delights is already open as an app.');return;}
   if(deferredInstall){
@@ -159,27 +229,50 @@ async function install(){
   openModal('Install Gracious Delights',`<div class="install-content">${icon('download')}<p>Keep Gracious Delights on your home screen. An internet connection is required for current stock, ordering, and kitchen updates.</p><ol>${steps}</ol><p class="help-note">The browser controls whether an automatic install dialog is available. Your order history stays linked to the browser where you ordered; keep its cookies to track your requests.</p><button class="button secondary" data-action="close">Got it</button></div>`);
 }
 document.addEventListener('click',async e=>{
-  const cat=e.target.closest('[data-category]');if(cat){category=cat.dataset.category;document.querySelectorAll('[data-category]').forEach(btn=>{btn.classList.toggle('active',btn===cat);btn.setAttribute('aria-pressed',String(btn===cat));});renderGrid();return;}
+  const cat=e.target.closest('[data-category]');if(cat){category=cat.dataset.category;$('#mobile-category').value=category;document.querySelectorAll('[data-category]').forEach(btn=>{btn.classList.toggle('active',btn===cat);btn.setAttribute('aria-pressed',String(btn===cat));});renderGrid();return;}
   const el=e.target.closest('[data-action]');if(!el)return;
+  if (el.getAttribute('aria-disabled') === 'true') return;
   const action=el.dataset.action,id=el.dataset.id;
   await ordering.handleAction(action,id,el);
-  if(action==='close')$('#modal').close();
-  if(action==='detail')productDetail(id);
+  if(action==='close')dialogs.close();
+  if(action==='detail')productDetail(id,el.dataset.variant);
   if(action==='about')about();
+  if(action==='how-to-order')howToOrder();
+  if(action==='policy')showPolicy();
   if(action==='install')await install();
   if(action==='dismiss-install'){installDismissed=true;installPromotion();}
-  if(action==='clear-filters'){query='';category='All delights';availableOnly=false;renderShop();}
+  if(action==='clear-filters'){query='';category='All delights';availableOnly=false;renderShop();$('#catalog-search').focus();}
   if(action==='retry')await refreshState();
 });
-$('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=$('#modal').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('#modal').close();}});
-function route(){
+function showMenu(moveFocus) {
+  $('#menu')?.scrollIntoView({block:'start', behavior:'instant'});
+  if (moveFocus) focusHeading($('#menu-title'), true);
+}
+document.addEventListener('click', event => {
+  if (!event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
+      !event.altKey && location.hash === '#menu' && event.target.closest('a[href="#menu"]')) {
+    event.preventDefault();
+    showMenu(true);
+  }
+});
+function route(moveFocus = false){
   const hash=location.hash;
-  mode='shop';
+  mode=hash==='#announcements'?'announcements':'shop';
+  document.title=mode==='announcements'?'Announcements · Gracious Delights':'Gracious Delights · Homemade treats in Binmaley';
   if($('#modal').open)$('#modal').close();
   render();
-  if(hash==='#menu')requestAnimationFrame(()=>$('#menu')?.scrollIntoView({behavior:'smooth'}));else window.scrollTo(0,0);
+  if (hash === '#menu') {
+    showMenu(moveFocus);
+  } else {
+    window.scrollTo(0, 0);
+    if (moveFocus) focusHeading($('#main h1'), true);
+  }
 }
-window.addEventListener('hashchange',route);
+$('.skip-link').addEventListener('click', event => {
+  event.preventDefault();
+  $('#main').focus();
+});
+window.addEventListener('hashchange', () => route(true));
 setInterval(refreshState,15000);
 window.addEventListener('focus',refreshState);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;installPromotion();});

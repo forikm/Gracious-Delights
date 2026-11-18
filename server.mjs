@@ -12,9 +12,11 @@ const server = http.createServer(async (req, res) => {
     if (new URL(req.url, 'http://localhost').pathname === '/api/shop') return await handler(req, res);
     if (!['GET','HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    const publicFiles = new Set(['/index.html','/styles.css','/orders.css','/app.js','/domain.js','/orders-ui.js','/manifest.webmanifest','/sw.js']);
-    if (pathname !== '/' && !publicFiles.has(pathname) && !pathname.startsWith('/assets/')) { res.writeHead(404); res.end('Not found'); return; }
-    const file = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+    const publicFiles = new Set(['/index.html','/styles.css','/orders.css','/app.js', '/interaction.js','/domain.js','/menu-catalog.js','/product-photos.js','/announcements.js','/announcements.css','/catalog-view.js','/orders-ui.js','/checkout-map.js','/manifest.webmanifest','/sw.js']);
+    const leaflet = /^\/vendor\/leaflet\/(?:leaflet\.(?:js|css)|images\/(?:marker-icon(?:-2x)?|marker-shadow|layers(?:-2x)?)\.png)$/.test(pathname);
+    if (pathname !== '/' && !publicFiles.has(pathname) && !pathname.startsWith('/assets/') && !leaflet) { res.writeHead(404); res.end('Not found'); return; }
+    const publicPath = leaflet ? pathname.replace('/vendor/leaflet/', '/node_modules/leaflet/dist/') : pathname;
+    const file = path.resolve(root, '.' + (publicPath === '/' ? '/index.html' : publicPath));
     if (!file.startsWith(root + path.sep) || pathname.split('/').some(p => p.startsWith('.')) || !(await stat(file)).isFile()) { res.writeHead(404); res.end('Not found'); return; }
     const bytes = await readFile(file);
     res.writeHead(200, { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Content-Length': bytes.length });
