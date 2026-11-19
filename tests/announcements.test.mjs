@@ -49,3 +49,17 @@ test('announcement rendering escapes HTML and keeps pinned updates first',()=>{
  assert.ok(container.innerHTML.includes('&lt;script&gt;'));assert.ok(container.innerHTML.includes('&lt;img'));
  assert.ok(!container.innerHTML.includes('<script>'));assert.ok(!container.innerHTML.includes('Secret draft'));
 });
+
+test('published photos stay matched to their announcement and additional photos can be expanded',()=>{
+ const publishedAt='2026-11-19T00:00:00Z';
+ const banana={id:'1c5abd31-b984-44a4-96dd-672fcf497f20',title:'Banana bread is back',body:'Our October update.',published:true,publishedAt};
+ const textOnly={id:randomUUID(),title:'Text-only update',body:'An update without photos.',published:true,publishedAt};
+ const container={innerHTML:''};
+ renderAnnouncements(container,[banana,textOnly]);
+ assert.equal((container.innerHTML.match(/<img /g)||[]).length,6);
+ assert.match(container.innerHTML,/<summary>Show 2 more photos<\/summary>/);
+ assert.match(container.innerHTML,/alt="Banana bread loaves in foil pans"/);
+ assert.equal((container.innerHTML.match(/class="announcement-photos"/g)||[]).length,1);
+ renderAnnouncements(container,[{...banana,published:false},textOnly]);
+ assert.doesNotMatch(container.innerHTML,/<img /);
+});
