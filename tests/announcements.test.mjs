@@ -59,6 +59,10 @@ test('published photos stay matched to their announcement and additional photos 
  assert.equal((container.innerHTML.match(/<img /g)||[]).length,6);
  assert.match(container.innerHTML,/<summary>Show 2 more photos<\/summary>/);
  assert.match(container.innerHTML,/alt="Banana bread loaves in foil pans"/);
+ assert.match(container.innerHTML,/<time datetime="2026-10-30T17:53:00\+08:00">October 30, 2026<\/time>/);
+ assert.match(container.innerHTML,/<time datetime="2026-11-19T00:00:00Z">November 19, 2026<\/time>/);
+ assert.equal(sortedAnnouncements([banana,textOnly])[0],textOnly);
+ assert.equal(banana.publishedAt,publishedAt);
  assert.equal((container.innerHTML.match(/class="announcement-photos"/g)||[]).length,1);
  renderAnnouncements(container,[{...banana,published:false},textOnly]);
  assert.doesNotMatch(container.innerHTML,/<img /);
